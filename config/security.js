@@ -14,7 +14,7 @@ export const securityConfig = {
   // A per-process random value is acceptable for local development only.
   sessionSecret: configuredSessionSecret || randomBytes(48).toString('hex'),
   sessionMaxAgeMs: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
-  bcryptRounds: 12,
+  bcryptRounds: 10,
   csrfCookieName: 'bvo_csrf',
   sessionCookieName: 'bvo_session'
 };
