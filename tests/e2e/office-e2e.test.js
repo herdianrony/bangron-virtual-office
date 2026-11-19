@@ -27,10 +27,11 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
   test('office navigation elements are present', async ({ page }) => {
     await page.goto('/office');
 
-    // Navigation links should be present
-    await expect(page.locator('a[href="#/office"]')).toBeVisible();
-    await expect(page.locator('a[href="#/agents"]')).toBeVisible();
-    await expect(page.locator('a[href="#/tasks"]')).toBeVisible();
+    // Navigation links should be present (filter to visible ones to avoid
+    // hidden mobile dropdown duplicates).
+    await expect(page.locator('a[href="#/office"]').filter({ visible: true }).first()).toBeVisible();
+    await expect(page.locator('a[href="#/agents"]').filter({ visible: true }).first()).toBeVisible();
+    await expect(page.locator('a[href="#/tasks"]').filter({ visible: true }).first()).toBeVisible();
   });
 
   test('HUD controls are present', async ({ page }) => {
