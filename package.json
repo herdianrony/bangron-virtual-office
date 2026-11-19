@@ -1,7 +1,7 @@
 {
   "name": "bangron-virtual-office",
   "version": "1.0.0",
-  "description": "Bangron Virtual Office - An AI-powered digital studio with 2.5D Isometric Virtual Office",
+  "description": "Bangron Virtual Office - An AI-powered digital studio with a realistic 2D top-down virtual office",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
@@ -21,8 +21,9 @@
     "ai-agents",
     "hermes-agent",
     "multi-agent",
-    "isometric",
-    "svg"
+    "svg",
+    "top-down",
+    "pixi.js"
   ],
   "author": "Bangron",
   "license": "UNLICENSED",
