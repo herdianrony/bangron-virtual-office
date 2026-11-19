@@ -3,6 +3,11 @@ import Database from 'better-sqlite3';
 import { runMigrations } from '../../src/database/migrations/runner.js';
 import { seedInitialOffice } from '../../src/database/seeds/initial_office.js';
 
+// Set required env for seedInitialOffice
+process.env.INITIAL_DIRECTOR_PASSWORD = 'TestPass123456';
+process.env.INITIAL_DIRECTOR_EMAIL = 'director@bangron.office';
+process.env.INITIAL_DIRECTOR_NAME = 'Test Director';
+
 describe('Database & Migrations', () => {
   let db;
 

@@ -57,7 +57,7 @@ describe('Bangron Virtual Office API Integration Test Suite', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.metrics.totalAgents).toBeGreaterThanOrEqual(5);
     expect(res.body.data.hermesHealth.connected).toBe(false);
-    expect(res.body.data.hermesHealth.status).toContain('RUNTIME_UNAVAILABLE');
+    expect(res.body.data.hermesHealth.status).toContain('RUNTIME_UNVERIFIED');
   });
 
   it('fetches Virtual Office complete state snapshot', async () => {
