@@ -7,53 +7,26 @@ export class HermesAdapter {
   }
 
   async getRuntimeStatus() {
-    // In this environment, hermes CLI/server is not installed, verified as:
-    // RUNTIME_UNAVAILABLE (MOCK / ADAPTER READY)
     return {
       connected: false,
-      runtimeVerified: this.config.runtimeVerified,
-      apiUrl: this.config.apiUrl,
-      status: 'RUNTIME_UNAVAILABLE (ADAPTER READY)',
-      message: 'Hermes Agent runtime is not reachable in current container environment. Webhook and Adapter layers are active and test-verified.'
+      runtimeVerified: false,
+      apiUrl: this.config.apiUrl || null,
+      status: 'RUNTIME_UNVERIFIED',
+      message: 'No supported Hermes runtime transport has been configured and verified. Webhook ingestion is a separate capability.'
     };
   }
 
-  async dispatchTaskInstruction({ taskId, instruction, agentProfile, parameters = {} }) {
-    logger.info({ taskId, agentProfile: agentProfile.slug }, 'Dispatching task instruction via Hermes Adapter');
+  async dispatchTaskInstruction({ taskId, agentProfile }) {
+    logger.warn(
+      { taskId, agentProfile: agentProfile?.slug },
+      'Task dispatch skipped: Hermes runtime transport is not verified'
+    );
 
-    // If live API is configured and reachable
-    if (this.config.runtimeVerified && this.config.apiUrl) {
-      try {
-        const response = await fetch(`${this.config.apiUrl}/v1/agent/dispatch`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.config.apiKey}`
-          },
-          body: JSON.stringify({
-            taskId,
-            instruction,
-            profile: agentProfile,
-            parameters
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Hermes API returned HTTP ${response.status}`);
-        }
-
-        return await response.json();
-      } catch (err) {
-        logger.error({ err, taskId }, 'Hermes API dispatch error');
-        throw err;
-      }
-    }
-
-    // Mock / Standalone execution acknowledgment when runtime is not verified
     return {
       dispatched: false,
       runtimeAvailable: false,
-      message: 'Task created in Bangron Virtual Office. Simulated or demo execution can proceed.'
+      reason: 'HERMES_RUNTIME_UNVERIFIED',
+      message: 'Task is stored in Bangron Virtual Office, but no live Hermes execution was started.'
     };
   }
 }
