@@ -1,4 +1,4 @@
-/* Bangron Virtual Office — Isometric 2.5D SVG Canvas & Controls */
+/* Bangron Virtual Office — Realistic 2D Top-Down SVG + PixiJS Canvas & Controls */
 
 .office-container {
   width: 100%;
@@ -181,7 +181,7 @@
   animation: td-glow-pulse 3s ease-in-out infinite;
 }
 
-/* ---------- Hover tooltip (shared with isometric mode) ---------- */
+/* ---------- Hover tooltip for top-down rooms and workstations ---------- */
 
 #office-tooltip {
   position: fixed;
