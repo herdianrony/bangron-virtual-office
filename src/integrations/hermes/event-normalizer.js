@@ -1,10 +1,11 @@
 import { generateId } from '../../utils/crypto.js';
 
-// Peta normalisasi nama event. Mencakup dua sumber nama:
+// Peta normalisasi nama event. Mencakup tiga sumber nama:
 // 1) Nama hook Gateway/klasik Hermes: agent:start, agent:step, agent:end,
 //    pre_tool_call, post_tool_call, subagent:spawn, subagent:exit
 // 2) Nama hook resmi Outbound Webhooks (plugin-hook set): on_session_start,
 //    on_session_end, subagent_start, subagent_stop, pre_llm_call, ...
+// 3) SSE events dari API Server (/v1/runs/{run_id}/events): message.delta, run.completed, run.failed, run.cancelled
 // Referensi kontrak resmi:
 // https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
 const TYPE_MAP = {
@@ -21,7 +22,15 @@ const TYPE_MAP = {
   'on_session_finalize': 'agent.execution.ended',
   'subagent_start': 'agent.subagent.spawned',
   'subagent_stop': 'agent.subagent.exited',
-  'pre_llm_call': 'agent.execution.step'
+  'pre_llm_call': 'agent.execution.step',
+  // SSE events from API Server
+  'message.delta': 'agent.execution.step',
+  'run.completed': 'agent.execution.ended',
+  'run.failed': 'agent.execution.failed',
+  'run.cancelled': 'agent.execution.cancelled',
+  'run.steered': 'agent.execution.steered',
+  'approval.request': 'agent.approval.requested',
+  'approval.response': 'agent.approval.resolved'
 };
 
 export function normalizeHermesEvent(rawEvent) {
@@ -31,7 +40,8 @@ export function normalizeHermesEvent(rawEvent) {
 
   // Wire format resmi Outbound Webhooks memakai "hook_event_name";
   // format internal/klasik memakai event_type/type/event.
-  const rawType = rawEvent.hook_event_name || rawEvent.event_type || rawEvent.type || rawEvent.event;
+  // SSE events dari API Server memakai field "event".
+  const rawType = rawEvent.hook_event_name || rawEvent.event_type || rawEvent.type || rawEvent.event || rawEvent.event;
   if (!rawType) {
     throw new Error('Event missing hook_event_name/event_type identifier');
   }
@@ -39,15 +49,16 @@ export function normalizeHermesEvent(rawEvent) {
   const eventType = TYPE_MAP[rawType] || rawType;
   // Outbound webhooks: ID unik per delivery bernama delivery_id (Hermes retry
   // sekali sehingga ID yang sama bisa datang dua kali — dipakai untuk dedupe).
-  const eventId = rawEvent.event_id || rawEvent.id || rawEvent.delivery_id || generateId('evt');
-  const occurredAt = rawEvent.occurred_at || rawEvent.timestamp || new Date().toISOString();
+  // SSE events: bisa pakai seq atau timestamp+run_id.
+  const eventId = rawEvent.event_id || rawEvent.id || rawEvent.delivery_id || rawEvent.seq || generateId('evt');
+  const occurredAt = rawEvent.occurred_at || rawEvent.timestamp || rawEvent.timestamp ? new Date(rawEvent.timestamp * 1000).toISOString() : new Date().toISOString();
   const source = rawEvent.source || 'hermes';
 
   const agentId = rawEvent.agent_id || rawEvent.agentId || rawEvent.profile_id || null;
   const instanceId = rawEvent.instance_id || rawEvent.instanceId || null;
-  const sessionId = rawEvent.session_id || rawEvent.sessionId || null;
+  const sessionId = rawEvent.session_id || rawEvent.sessionId || rawEvent.run_id || null;
   const parentSessionId = rawEvent.parent_session_id || rawEvent.parentSessionId || null;
-  const taskId = rawEvent.task_id || rawEvent.taskId || null;
+  const taskId = rawEvent.task_id || rawEvent.taskId || rawEvent.metadata?.bangron_task_id || null;
   const correlationId = rawEvent.correlation_id || rawEvent.correlationId || null;
   // Nama profil Hermes yang memancarkan event (di luar multiplexed profile = "default")
   const profile = rawEvent.profile || null;
@@ -75,6 +86,16 @@ export function normalizeHermesEvent(rawEvent) {
     if (rawEvent.message) payload.note = String(rawEvent.message).slice(0, 300);
     if (rawEvent.response) payload.summary = String(rawEvent.response).slice(0, 400);
     if (rawEvent.error) payload.error = rawEvent.error;
+    // SSE message.delta events
+    if (rawEvent.delta) payload.delta = rawEvent.delta;
+    if (rawEvent.seq !== undefined) payload.seq = rawEvent.seq;
+    if (rawEvent.output) payload.output = rawEvent.output;
+    if (rawEvent.usage) payload.usage = rawEvent.usage;
+    if (rawEvent.completed !== undefined) payload.completed = rawEvent.completed;
+    if (rawEvent.failed !== undefined) payload.failed = rawEvent.failed;
+    if (rawEvent.interrupted !== undefined) payload.interrupted = rawEvent.interrupted;
+    if (rawEvent.turn_exit_reason) payload.turn_exit_reason = rawEvent.turn_exit_reason;
+    if (rawEvent.runtime) payload.runtime = rawEvent.runtime;
   }
   // on_session_end membawa extra.completed (bukan success) — samakan semantiknya
   if (payload && payload.completed !== undefined && payload.success === undefined) {

@@ -6,6 +6,8 @@ import { DeliverableRepository } from '../../database/repositories/deliverable.r
 import { AuditRepository } from '../../database/repositories/audit.repository.js';
 import { eventPublisher } from '../../realtime/event-publisher.js';
 import { hermesAdapter } from '../../integrations/hermes/adapter.js';
+import { hermesEventBridge } from '../../integrations/hermes/event-bridge.js';
+import logger from '../../utils/logger.js';
 
 export class TaskService {
   constructor(db = null) {
@@ -95,6 +97,8 @@ export class TaskService {
       hermesRunId = dispatchResult.runId;
       // Store the run_id in the task
       this.taskRepo.setHermesRunId(taskId, hermesRunId);
+      // Register run-to-task mapping for event correlation
+      hermesEventBridge.registerRunTaskMapping(hermesRunId, taskId);
       logger.info({ taskId, hermesRunId }, 'Hermes run ID stored for task');
     } else {
       logger.warn({ taskId, reason: dispatchResult.reason }, 'Failed to dispatch task to Hermes');
