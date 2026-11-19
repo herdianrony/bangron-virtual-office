@@ -71,6 +71,7 @@ const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL || 'director@bangron.o
 const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD || 'TestPass123456';
 
 async function loginAsDirector(context) {
+  // Use Playwright API request for login (maintains cookie jar)
   const loginRes = await context.request.post('http://localhost:3002/api/auth/login', {
     data: { email: DIRECTOR_EMAIL, password: DIRECTOR_PASSWORD }
   });
@@ -78,30 +79,20 @@ async function loginAsDirector(context) {
   const loginBody = await loginRes.json();
   expect(loginBody.success).toBe(true);
 
-  // Explicitly set the session cookie in the browser context so WebSocket
-  // connections (established by the frontend JS) include it.
-  const setCookie = loginRes.headers()['set-cookie'] || loginRes.headers()['Set-Cookie'];
-  if (setCookie) {
-    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-    for (const c of cookies) {
-      const match = c.match(/bvo_session=([^;]+)/);
-      if (match) {
-        await context.addCookies([{
-          name: 'bvo_session',
-          value: match[1],
-          domain: 'localhost',
-          path: '/',
-          httpOnly: true,
-          sameSite: 'Lax'
-        }]);
-      }
-    }
+  // Extract session cookie from context's cookie jar
+  const cookies = await context.cookies();
+  const sessionCookieObj = cookies.find(c => c.name === 'bvo_session');
+  let sessionCookie = '';
+  if (sessionCookieObj) {
+    sessionCookie = `bvo_session=${sessionCookieObj.value}`;
   }
-
-  return { user: loginBody.data.user, csrfToken: loginBody.data.csrfToken };
+  
+  console.log('Session cookie for requests:', sessionCookie ? 'FOUND' : 'NOT FOUND');
+  
+  return { user: loginBody.data.user, csrfToken: loginBody.data.csrfToken, sessionCookie };
 }
 
-async function createTask(context, csrfToken) {
+async function createTask(context, csrfToken, sessionCookie) {
   const res = await context.request.post('http://localhost:3002/api/tasks', {
     data: {
       title: 'E2E Test Task',
@@ -109,7 +100,10 @@ async function createTask(context, csrfToken) {
       priority: 'normal',
       assignedAgentId: null
     },
-    headers: { 'x-csrf-token': csrfToken }
+    headers: { 
+      'x-csrf-token': csrfToken,
+      'cookie': sessionCookie
+    }
   });
   expect(res.ok()).toBeTruthy();
   const body = await res.json();
@@ -117,10 +111,13 @@ async function createTask(context, csrfToken) {
   return body.data.id;
 }
 
-async function assignTask(context, taskId, agentId, csrfToken) {
+async function assignTask(context, taskId, agentId, csrfToken, sessionCookie) {
   const res = await context.request.post(`http://localhost:3002/api/tasks/${taskId}/assign`, {
     data: { agentId },
-    headers: { 'x-csrf-token': csrfToken }
+    headers: { 
+      'x-csrf-token': csrfToken,
+      'cookie': sessionCookie
+    }
   });
   expect(res.ok()).toBeTruthy();
   const body = await res.json();
@@ -128,7 +125,7 @@ async function assignTask(context, taskId, agentId, csrfToken) {
   return body.data;
 }
 
-async function sendHermesEvent(context, eventType, payloadOverrides = {}) {
+async function sendHermesEvent(context, eventType, payloadOverrides = {}, sessionCookie) {
   const payload = {
     event_id: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     event_type: eventType,
@@ -145,24 +142,28 @@ async function sendHermesEvent(context, eventType, payloadOverrides = {}) {
     headers: {
       'content-type': 'application/json',
       'x-hermes-signature-256': signature,
-      'x-hermes-timestamp': String(timestamp)
+      'x-hermes-timestamp': String(timestamp),
+      'cookie': sessionCookie
     }
   });
   return res;
 }
 
-async function setRuntimeStatus(connected) {
-  const res = await fetch('http://localhost:3002/api/test/runtime-status', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ connected })
+async function setRuntimeStatus(context, connected, csrfToken, sessionCookie) {
+  const res = await context.request.post('http://localhost:3002/api/test/runtime-status', {
+    data: { connected },
+    headers: { 
+      'x-csrf-token': csrfToken,
+      'cookie': sessionCookie
+    }
   });
   return res;
 }
 
-// Remove old WS helper functions (no longer needed — using API-based verification)
-async function getAgentStatus(context, agentId) {
-  const res = await context.request.get('http://localhost:3002/api/virtual-office/agents');
+async function getAgentStatus(context, agentId, sessionCookie) {
+  const res = await context.request.get('http://localhost:3002/api/virtual-office/agents', {
+    headers: { 'cookie': sessionCookie }
+  });
   expect(res.ok()).toBeTruthy();
   const body = await res.json();
   const agents = body.data || [];
@@ -170,14 +171,18 @@ async function getAgentStatus(context, agentId) {
   return agent ? agent.status : null;
 }
 
-async function getOfficeState(context) {
-  const res = await context.request.get('http://localhost:3002/api/virtual-office/state');
+async function getOfficeState(context, sessionCookie) {
+  const res = await context.request.get('http://localhost:3002/api/virtual-office/state', {
+    headers: { 'cookie': sessionCookie }
+  });
   expect(res.ok()).toBeTruthy();
   return await res.json();
 }
 
-async function getRuntimeStatus(context) {
-  const res = await context.request.get('http://localhost:3002/api/integrations/hermes/status');
+async function getRuntimeStatus(context, sessionCookie) {
+  const res = await context.request.get('http://localhost:3002/api/integrations/hermes/status', {
+    headers: { 'cookie': sessionCookie }
+  });
   expect(res.ok()).toBeTruthy();
   return await res.json();
 }
@@ -185,8 +190,8 @@ async function getRuntimeStatus(context) {
 // Pilih agen yang statusnya 'idle' agar assignment ke 'queued' dapat diverifikasi.
 // Jika tidak ada idle, ambil agen pertama dan reset ke 'idle' lewat DB via API tidak memungkinkan,
 // maka gunakan agen yang sudah idle.
-async function findIdleAgent(context) {
-  const state = await getOfficeState(context);
+async function findIdleAgent(context, sessionCookie) {
+  const state = await getOfficeState(context, sessionCookie);
   const agents = state.data?.agents || state.agents || [];
   const idle = agents.find((a) => a.status === 'idle');
   if (idle) return idle;
@@ -196,7 +201,7 @@ async function findIdleAgent(context) {
 
 test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
   test('director login → task assign → agent queued → working → completed → idle', async ({ page, context }) => {
-    const { user, csrfToken } = await loginAsDirector(context);
+    const { user, csrfToken, sessionCookie } = await loginAsDirector(context);
     expect(user.role).toBe('director');
 
     // Load office page in browser
@@ -205,18 +210,18 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
     await page.screenshot({ path: 'tests/e2e/screenshots/e2e-office-loaded.png', fullPage: true });
 
     // Get initial agents via API
-    const state = await getOfficeState(context);
+    const state = await getOfficeState(context, sessionCookie);
     const agents = state.data?.agents || state.agents || [];
     expect(agents.length).toBeGreaterThan(0);
-    const testAgent = await findIdleAgent(context);
+    const testAgent = await findIdleAgent(context, sessionCookie);
     expect(testAgent.id).toBeDefined();
 
     // Create and assign task
-    const taskId = await createTask(context, csrfToken);
-    await assignTask(context, taskId, testAgent.id, csrfToken);
+    const taskId = await createTask(context, csrfToken, sessionCookie);
+    await assignTask(context, taskId, testAgent.id, csrfToken, sessionCookie);
 
     // Verify agent is queued (or already working if Hermes dispatch set it)
-    let agentStatus = await getAgentStatus(context, testAgent.id);
+    let agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(['queued', 'working']).toContain(agentStatus);
 
     // Simulate Hermes execution.started → agent becomes working
@@ -224,10 +229,10 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
       agent_id: testAgent.id,
       instance_id: testAgent.id,
       task_id: taskId
-    });
+    }, sessionCookie);
     expect(startRes.status()).toBe(200);
 
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('working');
 
     // Simulate Hermes execution.ended → agent becomes completed (then timer → idle)
@@ -235,35 +240,35 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
       agent_id: testAgent.id,
       instance_id: testAgent.id,
       task_id: taskId
-    });
+    }, sessionCookie);
     expect(completeRes.status()).toBe(200);
 
     // Agent may be 'completed' or already 'idle' if 1500ms timer fired
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(['completed', 'idle']).toContain(agentStatus);
 
     // Wait for completed → idle transition (1500ms backend timer)
     await page.waitForTimeout(2500);
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('idle');
 
     await page.screenshot({ path: 'tests/e2e/screenshots/e2e-idle.png', fullPage: true });
   });
 
   test('failed execution displays Failed', async ({ page, context }) => {
-    const { csrfToken } = await loginAsDirector(context);
+    const { csrfToken, sessionCookie } = await loginAsDirector(context);
     await page.goto('http://localhost:3002/office');
     await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
 
-    const state = await getOfficeState(context);
+    const state = await getOfficeState(context, sessionCookie);
     const agents = state.data?.agents || state.agents || [];
-    const testAgent = await findIdleAgent(context);
+    const testAgent = await findIdleAgent(context, sessionCookie);
 
-    const taskId = await createTask(context, csrfToken);
-    await assignTask(context, taskId, testAgent.id, csrfToken);
+    const taskId = await createTask(context, csrfToken, sessionCookie);
+    await assignTask(context, taskId, testAgent.id, csrfToken, sessionCookie);
     await page.waitForTimeout(500); // allow assign to propagate
 
-    let agentStatus = await getAgentStatus(context, testAgent.id);
+    let agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(['queued', 'working']).toContain(agentStatus);
 
     const failedRes = await sendHermesEvent(context, 'agent.execution.failed', {
@@ -271,108 +276,112 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
       instance_id: testAgent.id,
       task_id: taskId,
       payload: { error: 'Simulated failure', exit_code: 1 }
-    });
+    }, sessionCookie);
     expect(failedRes.status()).toBe(200);
 
     await page.waitForTimeout(800); // allow reconcile to propagate
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('failed');
 
     await page.screenshot({ path: 'tests/e2e/screenshots/e2e-failed.png', fullPage: true });
   });
 
   test('runtime disconnect displays Offline without losing lifecycle state', async ({ page, context }) => {
-    const { csrfToken } = await loginAsDirector(context);
+    const { csrfToken, sessionCookie } = await loginAsDirector(context);
     await page.goto('http://localhost:3002/office');
     await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
 
-    const state = await getOfficeState(context);
+    const state = await getOfficeState(context, sessionCookie);
     const agents = state.data?.agents || state.agents || [];
-    const testAgent = await findIdleAgent(context);
+    const testAgent = await findIdleAgent(context, sessionCookie);
 
-    const taskId = await createTask(context, csrfToken);
-    await assignTask(context, taskId, testAgent.id, csrfToken);
+    const taskId = await createTask(context, csrfToken, sessionCookie);
+    await assignTask(context, taskId, testAgent.id, csrfToken, sessionCookie);
     await page.waitForTimeout(500);
 
-    await sendHermesEvent(context, 'agent.execution.started', { agent_id: testAgent.id, instance_id: testAgent.id, task_id: taskId });
+    await sendHermesEvent(context, 'agent.execution.started', { agent_id: testAgent.id, instance_id: testAgent.id, task_id: taskId }, sessionCookie);
     await page.waitForTimeout(500);
 
-    let agentStatus = await getAgentStatus(context, testAgent.id);
+    let agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('working');
 
     // Runtime disconnect
-    const disconnectRes = await setRuntimeStatus(false);
+    const disconnectRes = await setRuntimeStatus(context, false, csrfToken, sessionCookie);
     expect(disconnectRes.status()).toBe(200);
 
     // Agent lifecycle must be preserved (still 'working', not overwritten)
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('working'); // lifecycle preserved despite disconnect
 
-    // Runtime status reflects disconnect
-    const runtime = await getRuntimeStatus(context);
-    expect(runtime.data.runtime.connected).toBe(false);
+    // Runtime status reflects disconnect (via frontend store)
+    const runtimeDisconnected = await page.evaluate(() => {
+      return window.store?.state?.runtimeStatus?.connected === false;
+    });
+    expect(runtimeDisconnected).toBe(true);
 
     await page.screenshot({ path: 'tests/e2e/screenshots/e2e-disconnected.png', fullPage: true });
   });
 
   test('runtime recovery restores correct visual state', async ({ page, context }) => {
-    const { csrfToken } = await loginAsDirector(context);
+    const { csrfToken, sessionCookie } = await loginAsDirector(context);
     await page.goto('http://localhost:3002/office');
     await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
 
-    const state = await getOfficeState(context);
+    const state = await getOfficeState(context, sessionCookie);
     const agents = state.data?.agents || state.agents || [];
-    const testAgent = await findIdleAgent(context);
+    const testAgent = await findIdleAgent(context, sessionCookie);
 
-    const taskId = await createTask(context, csrfToken);
-    await assignTask(context, taskId, testAgent.id, csrfToken);
+    const taskId = await createTask(context, csrfToken, sessionCookie);
+    await assignTask(context, taskId, testAgent.id, csrfToken, sessionCookie);
     await page.waitForTimeout(500);
 
-    await sendHermesEvent(context, 'agent.execution.started', { agent_id: testAgent.id, instance_id: testAgent.id, task_id: taskId });
+    await sendHermesEvent(context, 'agent.execution.started', { agent_id: testAgent.id, instance_id: testAgent.id, task_id: taskId }, sessionCookie);
     await page.waitForTimeout(500);
 
-    let agentStatus = await getAgentStatus(context, testAgent.id);
+    let agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('working');
 
     // Disconnect then recover
-    await setRuntimeStatus(false);
+    await setRuntimeStatus(context, false, csrfToken, sessionCookie);
     await page.waitForTimeout(500);
-    await setRuntimeStatus(true);
+    await setRuntimeStatus(context, true, csrfToken, sessionCookie);
     await page.waitForTimeout(500);
 
-    // Verify runtime is connected again
-    const runtime = await getRuntimeStatus(context);
-    expect(runtime.data.runtime.connected).toBe(true);
+    // Verify runtime is connected again (via frontend store)
+    const runtimeConnected = await page.evaluate(() => {
+      return window.store?.state?.runtimeStatus?.connected ?? false;
+    });
+    expect(runtimeConnected).toBe(true);
 
     // Agent lifecycle preserved
-    agentStatus = await getAgentStatus(context, testAgent.id);
+    agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('working');
 
     await page.screenshot({ path: 'tests/e2e/screenshots/e2e-recovered.png', fullPage: true });
   });
 
   test('browser refresh restores authoritative snapshot', async ({ page, context }) => {
-    const { csrfToken } = await loginAsDirector(context);
+    const { csrfToken, sessionCookie } = await loginAsDirector(context);
 
     await page.goto('http://localhost:3002/office');
     await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
 
-    const state = await getOfficeState(context);
+    const state = await getOfficeState(context, sessionCookie);
     const agents = state.data?.agents || state.agents || [];
-    const testAgent = await findIdleAgent(context);
+    const testAgent = await findIdleAgent(context, sessionCookie);
 
-    const taskId = await createTask(context, csrfToken);
-    await assignTask(context, taskId, testAgent.id, csrfToken);
+    const taskId = await createTask(context, csrfToken, sessionCookie);
+    await assignTask(context, taskId, testAgent.id, csrfToken, sessionCookie);
     await page.waitForTimeout(500);
 
     await sendHermesEvent(context, 'agent.execution.failed', {
       agent_id: testAgent.id,
       task_id: taskId,
       payload: { error: 'Pre-refresh failure' }
-    });
+    }, sessionCookie);
     await page.waitForTimeout(500);
 
-    let agentStatus = await getAgentStatus(context, testAgent.id);
+    let agentStatus = await getAgentStatus(context, testAgent.id, sessionCookie);
     expect(agentStatus).toBe('failed');
 
     // Browser refresh
@@ -380,7 +389,7 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
     await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
 
     // After refresh, verify authoritative state via API
-    const state2 = await getOfficeState(context);
+    const state2 = await getOfficeState(context, sessionCookie);
     const agents2 = state2.data?.agents || state2.agents || [];
     const agentAfterRefresh = agents2.find((a) => a.id === testAgent.id);
     expect(agentAfterRefresh.status).toBe('failed'); // authoritative state restored

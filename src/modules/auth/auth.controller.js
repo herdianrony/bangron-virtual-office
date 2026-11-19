@@ -43,7 +43,20 @@ export class AuthController {
         req.session.userRole = user.role;
         req.session.csrfToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-        return sendSuccess(res, { user, csrfToken: req.session.csrfToken }, 'Login successful');
+        // Explicitly save session to ensure cookie is set in response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            return sendError(res, 'SESSION_ERROR', 'Failed to save session', [], 500);
+          }
+          // Explicitly set session cookie as fallback (session middleware should do this, but ensure it's set)
+          res.cookie('bvo_session', req.sessionID, {
+            httpOnly: true,
+            secure: false, // development
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+          });
+          return sendSuccess(res, { user, csrfToken: req.session.csrfToken }, 'Login successful');
+        });
       });
     } catch (err) {
       return sendError(res, 'AUTH_FAILED', err.message, [], 401);
