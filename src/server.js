@@ -5,7 +5,12 @@ import { getDatabase, closeDatabase } from './database/connection.js';
 import { runMigrations } from './database/migrations/runner.js';
 import { createWebSocketServer } from './realtime/websocket-server.js';
 import { demoEngine } from './modules/demo/demo-engine.js';
+import { HermesAdapter } from './integrations/hermes/adapter.js';
+import { AgentRepository } from './database/repositories/agent.repository.js';
+import { eventPublisher } from './realtime/event-publisher.js';
 import logger from './utils/logger.js';
+
+const RUNTIME_CHECK_INTERVAL_MS = 30000;
 
 async function startServer() {
   try {
@@ -24,10 +29,30 @@ async function startServer() {
       );
 
       // Start the DEMO auto-play director unless explicitly disabled.
-      // Agents then walk through the office according to their active tasks.
       if (process.env.DEMO_AUTOPLAY !== 'false') {
         demoEngine.start();
       }
+
+      // PHASE 3: Runtime health watchdog — when Hermes is unreachable, mark all
+      // agents offline (avatar: Offline) so the UI never shows stale activity.
+      const hermesAdapter = new HermesAdapter();
+      const agentRepo = new AgentRepository(db);
+      setInterval(async () => {
+        try {
+          const runtime = await hermesAdapter.getRuntimeStatus();
+          if (!runtime.connected) {
+            const instances = agentRepo.getAllInstances();
+            for (const inst of instances) {
+              if (inst.status !== 'offline') {
+                agentRepo.updateInstanceStatus(inst.id, 'offline');
+                eventPublisher.publishAgentStatus(inst.id, 'offline', { reason: 'runtime_unavailable' });
+              }
+            }
+          }
+        } catch (err) {
+          logger.debug({ err }, 'Runtime health check tick skipped');
+        }
+      }, RUNTIME_CHECK_INTERVAL_MS).unref();
     });
 
     // Graceful shutdown
