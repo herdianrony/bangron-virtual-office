@@ -50,7 +50,11 @@ export function normalizeHermesEvent(rawEvent) {
   // Outbound webhooks: ID unik per delivery bernama delivery_id (Hermes retry
   // sekali sehingga ID yang sama bisa datang dua kali — dipakai untuk dedupe).
   // SSE events: bisa pakai seq atau timestamp+run_id.
-  const eventId = rawEvent.event_id || rawEvent.id || rawEvent.delivery_id || rawEvent.seq || generateId('evt');
+  // Normalize numeric IDs to strings to avoid SQLite type affinity issues (999 -> '999.0')
+  let eventId = rawEvent.event_id || rawEvent.id || rawEvent.delivery_id || rawEvent.seq || generateId('evt');
+  if (typeof eventId === 'number') {
+    eventId = String(eventId);
+  }
   const occurredAt = rawEvent.occurred_at || rawEvent.timestamp || rawEvent.timestamp ? new Date(rawEvent.timestamp * 1000).toISOString() : new Date().toISOString();
   const source = rawEvent.source || 'hermes';
 
