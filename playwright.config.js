@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3003',
+    baseURL: 'http://localhost:3002',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -19,9 +19,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'PORT=3003 NODE_ENV=development node src/server.js',
-    port: 3003,
-    baseURL: 'http://localhost:3003',
+    command: 'PORT=3002 NODE_ENV=development node src/server.js',
+    port: 3002,
+    baseURL: 'http://localhost:3002',
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
   },

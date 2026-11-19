@@ -26,6 +26,7 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
 import demoRoutes from './modules/demo/demo.routes.js';
 import hermesRoutes from './integrations/hermes/hermes.routes.js';
+import { createTestRoutes } from './modules/test/test.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +116,11 @@ export function createApp(customDb = null) {
   app.use('/api/audit', auditRoutes);
   app.use('/api/demo', demoRoutes);
   app.use('/api/integrations/hermes', hermesRoutes);
+
+  // Test-only routes (development / E2E only — never in production).
+  if (appConfig.isProduction === false) {
+    app.use('/api', createTestRoutes());
+  }
 
   // Single Page App routing fallback for UI routes
   const appRoutes = [
