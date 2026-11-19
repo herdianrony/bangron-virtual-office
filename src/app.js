@@ -38,17 +38,26 @@ export function createApp(customDb = null) {
   // deployment produksi). Tanpa ini, express-rate-limit menolak request eksternal
   // yang membawa X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR -> HTTP 500).
   // '1' = percayai satu hop proxy pertama.
-  app.set('trust proxy', 1);
+  app.set('trust proxy', appConfig.isProduction ? Number(process.env.TRUST_PROXY_HOPS || 1) : false);
   const db = customDb || getDatabase();
   const sessionStore = new SQLiteSessionStore(db);
 
-  // Live preview compatibility: Disable frameguard so preview iframe can render smoothly
-  app.use(
-    helmet({
-      frameguard: false,
-      contentSecurityPolicy: false // Allows self-contained SVGs, live WebSockets & iframe rendering
-    })
-  );
+  // Keep local preview flexible, but enforce browser security headers in production.
+  app.use(helmet({
+    frameguard: { action: 'sameorigin' },
+    contentSecurityPolicy: appConfig.isProduction ? {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'", 'ws:', 'wss:']
+      }
+    } : false
+  }));
 
   // Raw body capture for HMAC webhook signature verification
   app.use(
@@ -73,7 +82,7 @@ export function createApp(customDb = null) {
       store: sessionStore,
       cookie: {
         httpOnly: true,
-        secure: false, // Set false for local HTTP dev and proxy compatibility
+        secure: appConfig.isProduction, // Requires HTTPS in production
         sameSite: 'lax',
         maxAge: securityConfig.sessionMaxAgeMs
       }
