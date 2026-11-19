@@ -96,6 +96,13 @@ describe('PHASE 3 — Real-Time Office UI & Agent Lifecycle Visual Integration',
 
   afterEach(() => {
     publishSpy.mockRestore();
+    // Clear any pending completed→idle timers to avoid cross-test leaks.
+    if (reconciler?._pendingCompletedTimers) {
+      for (const timer of reconciler._pendingCompletedTimers.values()) {
+        clearTimeout(timer);
+      }
+      reconciler._pendingCompletedTimers.clear();
+    }
     if (db) db.close();
   });
 
@@ -158,18 +165,26 @@ describe('PHASE 3 — Real-Time Office UI & Agent Lifecycle Visual Integration',
     });
 
     it('maps agent.execution.ended (success, no subtasks) → idle (Completed → Idle after completion)', () => {
-      taskRepo.createTask({ id: 'task_p3_1', title: 'P3 Task', assignedAgentId: 'inst_phase3_dev' });
-      reconciler.reconcile({
-        event_id: 'evt_end_ok',
-        event_type: 'agent.execution.ended',
-        instance_id: 'inst_phase3_dev',
-        task_id: 'task_p3_1',
-        payload: { success: true }
-      });
-      // Task completed, agent goes idle (the 'completed' avatar state is shown
-      // transiently via the bubble/activity before settling to idle).
-      expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('idle');
-      expect(taskRepo.getTaskById('task_p3_1').status).toBe('completed');
+      vi.useFakeTimers();
+      try {
+        taskRepo.createTask({ id: 'task_p3_1', title: 'P3 Task', assignedAgentId: 'inst_phase3_dev' });
+        reconciler.reconcile({
+          event_id: 'evt_end_ok',
+          event_type: 'agent.execution.ended',
+          instance_id: 'inst_phase3_dev',
+          task_id: 'task_p3_1',
+          payload: { success: true }
+        });
+        // Task DB status is 'completed' (never changed by animation timing).
+        expect(taskRepo.getTaskById('task_p3_1').status).toBe('completed');
+        // Avatar shows 'completed' first (transient visual state).
+        expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('completed');
+        // Advance timers → avatar returns to 'idle'.
+        vi.advanceTimersByTime(1500);
+        expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('idle');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('maps agent.execution.failed → failed (Failed → Failed)', () => {
@@ -278,6 +293,72 @@ describe('PHASE 3 — Real-Time Office UI & Agent Lifecycle Visual Integration',
         payload: {}
       });
       expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('working');
+    });
+
+    it('TaskService.assignAgent publishes queued, NOT working (bug fix)', async () => {
+      // Mock hermesAdapter to avoid network calls in tests.
+      const { hermesAdapter } = await import('../../src/integrations/hermes/adapter.js');
+      const dispatchSpy = vi.spyOn(hermesAdapter, 'dispatchTaskInstruction');
+      dispatchSpy.mockResolvedValue({ dispatched: true, runId: 'hermes_run_p3' });
+
+      const svc = new TaskService(db);
+      const task = taskRepo.createTask({
+        id: 'task_p3_bugfix',
+        title: 'Bug fix verification',
+        assignedAgentId: null
+      });
+
+      const result = await svc.assignAgent('task_p3_bugfix', 'inst_phase3_dev', 'director');
+
+      // Task DB status is assigned/running (lifecycle), agent avatar is 'queued'.
+      const inst = agentRepo.getInstanceById('inst_phase3_dev');
+      expect(inst.status).toBe('queued');
+
+      // Only 'queued' should be published — never 'working' without execution.started.
+      const statusPublishes = publishSpy.mock.calls.filter(([t]) => t === 'agent.status.updated');
+      expect(statusPublishes.length).toBe(1);
+      expect(statusPublishes[0][1].status).toBe('queued');
+      expect(statusPublishes[0][1].reason).toBe('task_assigned');
+
+      const workingPublish = publishSpy.mock.calls.find(
+        ([t, d]) => t === 'agent.status.updated' && d.status === 'working'
+      );
+      expect(workingPublish).toBeUndefined();
+
+      dispatchSpy.mockRestore();
+    });
+
+    it('execution.ended success shows transient completed, then idle (bug fix)', () => {
+      vi.useFakeTimers();
+      try {
+        taskRepo.createTask({ id: 'task_p3_completed', title: 'Completed Task', assignedAgentId: 'inst_phase3_dev' });
+
+        reconciler.reconcile({
+          event_id: 'evt_p3_completed',
+          event_type: 'agent.execution.ended',
+          instance_id: 'inst_phase3_dev',
+          task_id: 'task_p3_completed',
+          payload: { success: true }
+        });
+
+        // Task DB status is 'completed' (never changed by animation timing).
+        expect(taskRepo.getTaskById('task_p3_completed').status).toBe('completed');
+
+        // Avatar immediately shows 'completed' (transient visual state).
+        expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('completed');
+        const lastPublish = publishSpy.mock.calls[publishSpy.mock.calls.length - 1];
+        expect(lastPublish[0]).toBe('agent.status.updated');
+        expect(lastPublish[1].status).toBe('completed');
+
+        // Advance timers past the 1500ms delay → avatar returns to 'idle'.
+        vi.advanceTimersByTime(1500);
+        expect(agentRepo.getInstanceById('inst_phase3_dev').status).toBe('idle');
+
+        const idlePublish = publishSpy.mock.calls.find(([t, d]) => t === 'agent.status.updated' && d.status === 'idle');
+        expect(idlePublish).toBeTruthy();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

@@ -114,7 +114,7 @@ export class TaskService {
 
     // PHASE 3: Assign the agent to their profile's default workstation and plot
     // a corridor-safe walking route so the frontend walks them there over WS.
-    const officeService = new VirtualOfficeService();
+    const officeService = new VirtualOfficeService(this.db);
     const profile = this.agentRepo.getProfileById(agent.profile_id);
     if (profile?.default_room_id) {
       const workstations = officeService.officeRepo.getAllWorkstations(profile.default_room_id);
@@ -166,7 +166,6 @@ export class TaskService {
     });
 
     eventPublisher.publishTaskStatus(updatedTask);
-    eventPublisher.publishAgentStatus(agentInstanceId, 'working');
     eventPublisher.publishAgentActivity(activity);
 
     return { ...updatedTask, hermesRunId };

@@ -30,6 +30,11 @@ export class StateReconciler {
       this.profileAgentMap = {};
       logger.warn('HERMES_PROFILE_AGENT_MAP bukan JSON valid; mapping profil dilewati');
     }
+    // Transient avatar state: when execution ends successfully, the avatar
+    // shows 'completed' briefly before returning to 'idle'. Task DB status
+    // stays 'completed' — never modified by animation timing.
+    this.COMPLETED_TO_IDLE_DELAY_MS = 1500;
+    this._pendingCompletedTimers = new Map(); // instanceId -> timer handle
   }
 
   reconcile(event) {
@@ -312,10 +317,32 @@ export class StateReconciler {
           }
 
           if (instance_id) {
-            this.agentRepo.updateInstanceStatus(instance_id, 'idle');
-            eventPublisher.publishAgentStatus(instance_id, 'idle');
+            // Transient avatar state: show 'completed' briefly, then return
+            // to 'idle'. Task DB status stays 'completed' — never modified
+            // by animation timing.
+            const existingTimer = this._pendingCompletedTimers.get(instance_id);
+            if (existingTimer) clearTimeout(existingTimer);
+
+            this.agentRepo.updateInstanceStatus(instance_id, 'completed');
+            eventPublisher.publishAgentStatus(instance_id, 'completed');
+
+            const timer = setTimeout(() => {
+              this._pendingCompletedTimers.delete(instance_id);
+              // Only return to idle if no newer event has changed the status.
+              // Guard against db being closed (e.g. test teardown).
+              try {
+                const current = this.agentRepo.getInstanceById(instance_id);
+                if (current && current.status === 'completed') {
+                  this.agentRepo.updateInstanceStatus(instance_id, 'idle');
+                  eventPublisher.publishAgentStatus(instance_id, 'idle');
+                }
+              } catch (err) {
+                logger.debug({ err, instanceId: instance_id }, 'Completed→idle timer skipped: db unavailable');
+              }
+            }, this.COMPLETED_TO_IDLE_DELAY_MS);
+            this._pendingCompletedTimers.set(instance_id, timer);
           }
-        }
+        }   // closes if (!isSuccess) { ... } else { ... }
       } else {
         if (instance_id) {
           this.agentRepo.updateInstanceStatus(instance_id, 'idle');

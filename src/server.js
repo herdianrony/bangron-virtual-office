@@ -33,24 +33,58 @@ async function startServer() {
         demoEngine.start();
       }
 
-      // PHASE 3: Runtime health watchdog — when Hermes is unreachable, mark all
-      // agents offline (avatar: Offline) so the UI never shows stale activity.
+      // PHASE 3: Runtime health watchdog.
+      // Tracks Hermes runtime availability separately from agent lifecycle state
+      // (queued / working / failed / collaborating / idle). When Hermes is
+      // unreachable, agents keep their lifecycle status but the UI is told the
+      // runtime is unavailable so avatars can show Offline without corrupting
+      // persisted task progress. When Hermes returns, agents resume normally.
       const hermesAdapter = new HermesAdapter();
       const agentRepo = new AgentRepository(db);
+      let runtimeConnected = null; // null = unknown, true/false = last known
+      let healthCheckInFlight = false; // prevent overlapping requests
+
       setInterval(async () => {
+        if (healthCheckInFlight) return;
+        healthCheckInFlight = true;
         try {
           const runtime = await hermesAdapter.getRuntimeStatus();
-          if (!runtime.connected) {
-            const instances = agentRepo.getAllInstances();
-            for (const inst of instances) {
-              if (inst.status !== 'offline') {
-                agentRepo.updateInstanceStatus(inst.id, 'offline');
-                eventPublisher.publishAgentStatus(inst.id, 'offline', { reason: 'runtime_unavailable' });
+          const connected = !!runtime.connected;
+
+          if (runtimeConnected === null) {
+            // First tick: just record, don't churn state.
+            runtimeConnected = connected;
+          } else if (connected !== runtimeConnected) {
+            // State changed: publish runtime availability change.
+            runtimeConnected = connected;
+            eventPublisher.publish('runtime.status.changed', {
+              connected,
+              reason: connected ? 'runtime_recovered' : 'runtime_unavailable',
+              timestamp: new Date().toISOString()
+            });
+            if (!connected) {
+              // Hermes went away: mark agents Offline only if they are in a
+              // transient/active state that can't persist without runtime.
+              // Preserve task lifecycle state (queued/working/etc.) — those
+              // are reconciled by Hermes events when the runtime returns.
+              const instances = agentRepo.getAllInstances();
+              for (const inst of instances) {
+                if (inst.status === 'working' || inst.status === 'thinking' || inst.status === 'collaborating') {
+                  agentRepo.updateInstanceStatus(inst.id, 'offline');
+                  eventPublisher.publishAgentStatus(inst.id, 'offline', {
+                    reason: 'runtime_unavailable',
+                    preservedStatus: inst.status
+                  });
+                }
               }
             }
+            // Recovery: do NOT overwrite agent statuses — Hermes events will
+            // drive the correct transitions once execution resumes.
           }
         } catch (err) {
           logger.debug({ err }, 'Runtime health check tick skipped');
+        } finally {
+          healthCheckInFlight = false;
         }
       }, RUNTIME_CHECK_INTERVAL_MS).unref();
     });
