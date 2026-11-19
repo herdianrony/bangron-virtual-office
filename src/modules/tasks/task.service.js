@@ -5,6 +5,7 @@ import { ActivityRepository } from '../../database/repositories/activity.reposit
 import { DeliverableRepository } from '../../database/repositories/deliverable.repository.js';
 import { AuditRepository } from '../../database/repositories/audit.repository.js';
 import { eventPublisher } from '../../realtime/event-publisher.js';
+import { hermesAdapter } from '../../integrations/hermes/adapter.js';
 
 export class TaskService {
   constructor(db = null) {
@@ -60,7 +61,7 @@ export class TaskService {
     return dep;
   }
 
-  assignAgent(taskId, agentInstanceId, actorId = 'director') {
+  async assignAgent(taskId, agentInstanceId, actorId = 'director') {
     const task = this.taskRepo.getTaskById(taskId);
     if (!task) throw new Error('Task not found');
 
@@ -73,6 +74,32 @@ export class TaskService {
       throw new Error('Cannot assign/start task: Prerequisite tasks have not been completed yet.');
     }
 
+    // Build instruction for Hermes
+    const instruction = `Task: ${task.title}\n\nDescription: ${task.description || 'No description provided.'}\n\nPriority: ${task.priority}\nAssigned Agent: ${agent.display_name} (${agent.profile_name})\n\nPlease execute this task and provide a summary of the work completed.`;
+
+    // Dispatch to Hermes
+    const agentProfile = {
+      slug: agent.profile_slug,
+      name: agent.profile_name
+    };
+
+    const dispatchResult = await hermesAdapter.dispatchTaskInstruction({
+      taskId: task.id,
+      instruction,
+      agentProfile,
+      parameters: {}
+    });
+
+    let hermesRunId = null;
+    if (dispatchResult.dispatched) {
+      hermesRunId = dispatchResult.runId;
+      // Store the run_id in the task
+      this.taskRepo.setHermesRunId(taskId, hermesRunId);
+      logger.info({ taskId, hermesRunId }, 'Hermes run ID stored for task');
+    } else {
+      logger.warn({ taskId, reason: dispatchResult.reason }, 'Failed to dispatch task to Hermes');
+    }
+
     const updatedTask = this.taskRepo.assignAgent(taskId, agentInstanceId);
     this.agentRepo.updateInstanceStatus(agentInstanceId, 'working');
 
@@ -80,7 +107,7 @@ export class TaskService {
       agentInstanceId,
       taskId,
       activityType: 'task.assigned',
-      description: `Task assigned: ${task.title}`
+      description: `Task assigned: ${task.title}` + (hermesRunId ? ` (Hermes run: ${hermesRunId})` : '')
     });
 
     this.auditRepo.log({
@@ -89,14 +116,14 @@ export class TaskService {
       action: 'task.assigned',
       resourceType: 'agent_task',
       resourceId: taskId,
-      after: { assignedAgentId: agentInstanceId }
+      after: { assignedAgentId: agentInstanceId, hermesRunId }
     });
 
     eventPublisher.publishTaskStatus(updatedTask);
     eventPublisher.publishAgentStatus(agentInstanceId, 'working');
     eventPublisher.publishAgentActivity(activity);
 
-    return updatedTask;
+    return { ...updatedTask, hermesRunId };
   }
 
   cancelTask(taskId, reason = 'Cancelled by Director', actorId = 'director') {
