@@ -2,7 +2,7 @@
 
 > **Tagline:** An AI-powered digital studio.  
 > **Director:** Bangron  
-> **Visual Style:** 2.5D Isometric Virtual Office (SVG-based renderer)  
+> **Visual Style:** Realistic 2D Top-Down Virtual Office (SVG architecture + PixiJS/WebGL agent layer)  
 > **Runtime Integration:** Hermes Agent (Multi-agent architecture)
 
 Bangron Virtual Office is a standalone AI Agent Management & Virtual Office application. It serves as the operational command center where the Director can visually monitor AI agent activity, manage agent profiles, assign and supervise tasks, observe collaboration patterns, inspect deliverables, approve sensitive operations, and interact with the Hermes Agent runtime.
@@ -23,7 +23,7 @@ Bangron Virtual Office is a standalone AI Agent Management & Virtual Office appl
 - **Web Framework:** Express.js 5
 - **Database:** SQLite with `better-sqlite3` (WAL mode, Foreign Keys, prepared statements)
 - **Realtime Transport:** WebSocket (`ws`) with session-based authentication and reconnection recovery
-- **Frontend:** Vanilla HTML5, CSS3, JavaScript ES Modules, SVG 2.5D isometric renderer
+- **Frontend:** Vanilla HTML5, CSS3, JavaScript ES Modules, SVG floor-plan renderer + PixiJS 8 (WebGL) agent layer
 - **Security:** Helmet, express-rate-limit, express-session (SQLite store), bcryptjs, HMAC-SHA256
 - **Testing:** Vitest (unit & integration tests), Playwright ready
 - **Logging:** Pino
@@ -46,7 +46,7 @@ npm run seed
 ```
 
 This sets up:
-- 14-room architectural office plan (corridors, library, coffee room) with an isometric SVG view, waypoint navigation, and interactive workstations.
+- 14-room architectural office plan (corridors, library, coffee room) with a realistic top-down view, PixiJS-rendered agents, waypoint navigation, and interactive workstations.
 - Initial Director account using the email and password configured in `.env`.
 - Specialist agent profiles across Development, Creative, UI/UX, Research, QA, Marketing, and Operations.
 - Isolated Demo workspace with active tasks and realistic activity streams.
@@ -65,7 +65,7 @@ The server will start on `http://0.0.0.0:3000`.
 | Route | Description |
 |---|---|
 | `/login` | Director authentication portal |
-| `/office` | 2.5D Isometric Virtual Office with camera pan/zoom & agent following |
+| `/office` | Realistic 2D Top-Down Virtual Office with PixiJS agents, camera pan/zoom & agent following |
 | `/dashboard` | Director operations center: metrics, active tasks, agent status, and approvals |
 | `/agents` | Agent profile registry, capabilities, tool permissions, and runtime sessions |
 | `/tasks` | Multi-agent task board, subtasks, dependency graph, and execution traces |
