@@ -36,62 +36,77 @@ export class MovementEngine {
 
   syncAgents(agentsList) {
     for (const a of agentsList) {
+      const px = Number.isFinite(Number(a.position_x)) ? Number(a.position_x) : 300;
+      const py = Number.isFinite(Number(a.position_y)) ? Number(a.position_y) : 300;
       const existing = this.agents.get(a.id);
-      const px = a.position_x !== undefined ? a.position_x : 300;
-      const py = a.position_y !== undefined ? a.position_y : 300;
+      const route = Array.isArray(a.path)
+        ? a.path
+            .filter((point) => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+            .map((point) => ({ x: Number(point.x), y: Number(point.y) }))
+        : [];
+      const routeKey = route.length ? JSON.stringify(route) : null;
 
       if (!existing) {
+        // Apply an initial server route as well as later route updates. Without
+        // this, an agent loaded mid-walk would incorrectly appear stationary.
+        const first = route.length ? route[0] : null;
         this.agents.set(a.id, {
           ...a,
           x: px,
           y: py,
-          targetX: px,
-          targetY: py,
-          speed: 60, // base units/sec
+          targetX: first ? first.x : (Number.isFinite(Number(a.target_x)) ? Number(a.target_x) : px),
+          targetY: first ? first.y : (Number.isFinite(Number(a.target_y)) ? Number(a.target_y) : py),
+          speed: 60, // base units/sec; simulationSpeed changes visuals only
           direction: a.direction || 'SE',
-          path: [],
-          arriveStatus: null,
-          moveNote: null,
-          move_note: null,
-          walkPhase: 0,   // advances with distance walked; drives the leg animation
+          path: first ? route.slice(1) : [],
+          routeKey,
+          arriveStatus: a.arrive_status || a.arriveStatus || null,
+          moveNote: a.move_note || a.moveNote || null,
+          move_note: a.move_note || a.moveNote || null,
+          walkPhase: 0,
           moving: false,
-          headingX: 0,    // unit vector of current walk heading (for feet orientation)
+          headingX: 0,
           headingY: 1
         });
-      } else {
-        existing.status = a.status;
-        existing.display_name = a.display_name;
-        existing.department = a.department;
-        existing.active_task_title = a.active_task_title;
-        existing.current_tool = a.current_tool;
+        continue;
+      }
 
-        if (Array.isArray(a.path) && a.path.length > 0) {
-          // Server-computed waypoint route: walk leg by leg through corridors.
-          existing.path = a.path.map((p) => ({ x: p.x, y: p.y }));
-          const first = existing.path.shift();
-          existing.targetX = first.x;
-          existing.targetY = first.y;
-          existing.arriveStatus = a.arrive_status || null;
-          existing.moveNote = a.move_note || null;
-          existing.move_note = a.move_note || null;
-        } else if (a.target_x !== undefined && a.target_y !== undefined) {
-          // Direct target update (e.g. manual REST PATCH): cancel any queued route.
-          existing.path = [];
-          existing.targetX = a.target_x;
-          existing.targetY = a.target_y;
-          existing.arriveStatus = a.arrive_status || null;
-          existing.moveNote = a.move_note || null;
-          existing.move_note = a.move_note || null;
-        } else if (
-          (!existing.path || existing.path.length === 0) &&
-          Math.hypot(existing.targetX - existing.x, existing.targetY - existing.y) <= 1 &&
-          (Math.abs(existing.targetX - px) > 1 || Math.abs(existing.targetY - py) > 1)
-        ) {
-          // Idle agent with an out-of-band DB position change: honor the new spot.
-          // Never interrupt an in-progress waypoint walk with stale DB positions.
-          existing.targetX = px;
-          existing.targetY = py;
-        }
+      existing.status = a.status ?? existing.status;
+      existing.display_name = a.display_name ?? existing.display_name;
+      existing.department = a.department ?? existing.department;
+      existing.active_task_title = a.active_task_title ?? existing.active_task_title;
+      existing.current_tool = a.current_tool ?? existing.current_tool;
+
+      if (routeKey && routeKey !== existing.routeKey) {
+        // Server-computed waypoint route: walk each corridor-safe leg in order.
+        existing.path = route.slice(1);
+        existing.targetX = route[0].x;
+        existing.targetY = route[0].y;
+        existing.routeKey = routeKey;
+        existing.arriveStatus = a.arrive_status || a.arriveStatus || null;
+        existing.moveNote = a.move_note || a.moveNote || null;
+        existing.move_note = existing.moveNote;
+      } else if (
+        Number.isFinite(Number(a.target_x)) &&
+        Number.isFinite(Number(a.target_y)) &&
+        (Number(a.target_x) !== existing.targetX || Number(a.target_y) !== existing.targetY)
+      ) {
+        // Direct target update (e.g. manual REST PATCH): cancel any queued route.
+        existing.path = [];
+        existing.routeKey = null;
+        existing.targetX = Number(a.target_x);
+        existing.targetY = Number(a.target_y);
+        existing.arriveStatus = a.arrive_status || a.arriveStatus || null;
+        existing.moveNote = a.move_note || a.moveNote || null;
+        existing.move_note = existing.moveNote;
+      } else if (
+        (!existing.path || existing.path.length === 0) &&
+        Math.hypot(existing.targetX - existing.x, existing.targetY - existing.y) <= 1 &&
+        (Math.abs(existing.targetX - px) > 1 || Math.abs(existing.targetY - py) > 1)
+      ) {
+        // Honor an out-of-band persisted position only when the agent is idle.
+        existing.targetX = px;
+        existing.targetY = py;
       }
     }
   }
