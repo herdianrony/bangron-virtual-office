@@ -26,6 +26,16 @@ export function createWebSocketServer(httpServer, sessionStore) {
       }
     }, AUTH_TIMEOUT_MS);
 
+    ws.on('close', () => {
+      settled = true;
+      clearTimeout(authTimeout);
+      connectionManager.removeClient(ws);
+    });
+    ws.on('error', (err) => {
+      logger.error({ err }, 'WebSocket client transport error');
+      connectionManager.removeClient(ws);
+    });
+
     const reject = (reason) => {
       if (settled) return;
       settled = true;
@@ -60,6 +70,7 @@ export function createWebSocketServer(httpServer, sessionStore) {
           'SELECT id, name, role, is_active FROM users WHERE id = ?'
         ).get(sess.userId);
 
+        if (ws.readyState !== WebSocket.OPEN) return;
         if (!user || !user.is_active) {
           reject('inactive_or_missing_user');
           return;
@@ -81,12 +92,6 @@ export function createWebSocketServer(httpServer, sessionStore) {
           } catch (err) {
             logger.debug({ err }, 'Malformed client WS message');
           }
-        });
-
-        ws.on('close', () => connectionManager.removeClient(ws));
-        ws.on('error', (err) => {
-          logger.error({ err, userId: user.id }, 'WebSocket client error');
-          connectionManager.removeClient(ws);
         });
 
         sendInitialSnapshot(ws);
