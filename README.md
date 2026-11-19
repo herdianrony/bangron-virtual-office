@@ -12,7 +12,7 @@ Bangron Virtual Office is a standalone AI Agent Management & Virtual Office appl
 1. **Backend is the Source of Truth:** The top-down virtual office is an exact visual projection of verified operational state from SQLite and normalized agent event streams—not an arbitrary animation loop.
 2. **Deterministic Multi-Agent Coordination:** Tasks and subagent delegations are strictly tracked, with cycle-checked dependencies, execution sessions, and parent-task reconciliation.
 3. **Safety & Director Authority:** High-risk actions (production deployment, destructive DB operations, external publishing) require explicit Director approval through the backend policy engine.
-4. **Hermes Integration Contract:** Outbound webhooks and agent lifecycle events are HMAC-verified, deduplicated, normalized, and reconciled before state transitions occur.
+4. **Hermes Integration Contract:** Inbound events are accepted only when they satisfy Bangron's configured HMAC webhook contract, then deduplicated, normalized, and reconciled before state transitions occur.
 5. **Isolated Demo Mode:** A fully simulated studio environment populated with at least 5 specialist agents operates in an isolated namespace (`DEMO`), ensuring production telemetry remains pristine.
 
 ---
