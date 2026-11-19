@@ -9,7 +9,7 @@ export class CameraController {
     this.onTransformChange = null;
 
     this.panX = 0;
-    this.panY = 0; // Top-down camera starts without an isometric offset
+    this.panY = 0; // Top-down camera starts with no vertical offset
     this.scale = 1.0;
     this.minScale = 0.4;
     this.maxScale = 2.4;
