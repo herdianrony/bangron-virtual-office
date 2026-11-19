@@ -1,0 +1,138 @@
+import { store } from '../core/store.js';
+
+export class RealtimeClient {
+  constructor() {
+    this.ws = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.reconnectDelayMs = 2000;
+  }
+
+  connect() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        this.reconnectAttempts = 0;
+        store.setState({ wsConnected: true });
+        console.log('[Realtime] WebSocket connected to Bangron Virtual Office Gateway.');
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const envelope = JSON.parse(event.data);
+          this.handleEvent(envelope);
+        } catch (err) {
+          console.error('[Realtime] Failed to parse message:', err);
+        }
+      };
+
+      this.ws.onclose = () => {
+        store.setState({ wsConnected: false });
+        this.scheduleReconnect();
+      };
+
+      this.ws.onerror = (err) => {
+        console.warn('[Realtime] WebSocket error:', err);
+        this.ws.close();
+      };
+    } catch (err) {
+      console.error('[Realtime] Connection initiation error:', err);
+      this.scheduleReconnect();
+    }
+  }
+
+  scheduleReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(this.reconnectDelayMs * Math.pow(1.5, this.reconnectAttempts - 1), 20000);
+      console.log(`[Realtime] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${this.reconnectAttempts})...`);
+      setTimeout(() => this.connect(), delay);
+    }
+  }
+
+  handleEvent(envelope) {
+    const { type, data } = envelope;
+
+    switch (type) {
+      case 'office.state.snapshot':
+        store.setState({
+          rooms: data.rooms || [],
+          workstations: data.workstations || [],
+          tasks: data.activeTasks || []
+        });
+        if (data.agents) {
+          store.setAgents(data.agents);
+        }
+        break;
+
+      case 'agent.status.updated':
+        if (data.agent_instance_id) {
+          store.updateAgent(data.agent_instance_id, { status: data.status, ...data });
+        }
+        break;
+
+      case 'agent.created':
+        // Agen baru hasil auto-provisioning Hermes: masukkan ke store agar
+        // avatar langsung dirender tanpa reload halaman.
+        if (data && data.id) {
+          store.updateAgent(data.id, data);
+        }
+        break;
+
+      case 'agent.position.updated':
+        if (data.agent_instance_id) {
+          store.updateAgent(data.agent_instance_id, {
+            room_id: data.room_id,
+            workstation_id: data.workstation_id,
+            position_x: data.position_x,
+            position_y: data.position_y,
+            target_x: data.position_x,
+            target_y: data.position_y,
+            direction: data.direction,
+            path: data.path || null,
+            move_note: data.move_note || null,
+            arrive_status: data.arrive_status || null
+          });
+        }
+        break;
+
+      case 'task.status.updated':
+        // Update task list in store
+        const tasks = [...store.state.tasks];
+        const idx = tasks.findIndex((t) => t.id === data.id);
+        if (idx >= 0) {
+          tasks[idx] = data;
+        } else {
+          tasks.unshift(data);
+        }
+        store.setState({ tasks });
+        break;
+
+      case 'approval.updated':
+        store.notify('approval_updated', data);
+        break;
+
+      case 'agent.activity.created':
+        store.addActivity(data);
+        break;
+
+      case 'demo.reset':
+        // Request fresh snapshot
+        this.send({ type: 'request_snapshot' });
+        break;
+    }
+  }
+
+  send(msgObj) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msgObj));
+    }
+  }
+}
+
+export const realtimeClient = new RealtimeClient();
+export default realtimeClient;

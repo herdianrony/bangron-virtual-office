@@ -1,0 +1,15 @@
+node_modules/
+.env
+storage/database/*.sqlite*
+!storage/database/.gitkeep
+storage/database/backups/*
+!storage/database/backups/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/temp/*
+!storage/temp/.gitkeep
+.DS_Store
+coverage/
+dist/

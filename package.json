@@ -1,0 +1,53 @@
+{
+  "name": "bangron-virtual-office",
+  "version": "1.0.0",
+  "description": "Bangron Virtual Office - An AI-powered digital studio with 2.5D Isometric Virtual Office",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "backup": "node scripts/backup.js",
+    "health-check": "node scripts/health-check.js",
+    "build:css": "tailwindcss -i src/styles.css -o public/assets/css/tailwind-daisyui.bundle.css",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "node scripts/copy-pixi.js"
+  },
+  "keywords": [
+    "virtual-office",
+    "ai-agents",
+    "hermes-agent",
+    "multi-agent",
+    "isometric",
+    "svg"
+  ],
+  "author": "Bangron",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "pino": "^10.4.0",
+    "pino-pretty": "^13.2.0",
+    "pixi.js": "^8.23.0",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@flaticon/flaticon-uicons": "^3.3.1",
+    "@tailwindcss/cli": "^4.3.5",
+    "@tailwindcss/typography": "^0.5.20",
+    "daisyui": "^5.8.1",
+    "supertest": "^7.1.4",
+    "tailwindcss": "^4.3.5",
+    "vitest": "^4.1.0"
+  }
+}

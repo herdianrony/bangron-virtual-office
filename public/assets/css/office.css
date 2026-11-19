@@ -1,0 +1,199 @@
+/* Bangron Virtual Office — Isometric 2.5D SVG Canvas & Controls */
+
+.office-container {
+  width: 100%;
+  height: calc(100vh - 4rem);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Immersive fullscreen mode (Fullscreen API) */
+.office-container:fullscreen,
+.office-container:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: #0b1220;
+}
+
+#office-svg-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#office-svg-canvas:active {
+  cursor: grabbing;
+}
+
+/* PixiJS agent layer: WebGL canvas composited above the SVG floor plan,
+   below the HUD. Pointer events stay on the SVG (camera drag + tooltips);
+   agent clicks are resolved through a coordinate hit-test instead. */
+#office-pixi-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Floating HUD Controls */
+.office-hud {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 20;
+}
+
+/* Demo Control Ribbon */
+.demo-ribbon {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 20;
+}
+
+/* Floating Agent Inspector Drawer */
+.agent-inspector {
+  position: absolute;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  width: 350px;
+  max-height: 480px;
+  z-index: 25;
+  display: none;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.agent-inspector.open {
+  display: flex;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom Realtime Activity Ticker */
+.bottom-ticker {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  max-width: 540px;
+  z-index: 20;
+}
+
+.ticker-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   Top-down "Helicopter View" mode (.td-mode on .office-container)
+   Ported from bangron-studio-topdown.html — day/night lighting
+   ============================================================ */
+
+.office-container.td-mode {
+  background: #e9efe7;
+  transition: background 0.9s ease;
+}
+
+.office-container.td-mode.td-night {
+  background: #141a24;
+}
+
+.office-container.td-mode:fullscreen,
+.office-container.td-mode:-webkit-full-screen {
+  background: #e9efe7;
+}
+
+.office-container.td-mode.td-night:fullscreen,
+.office-container.td-mode.td-night:-webkit-full-screen {
+  background: #141a24;
+}
+
+/* Ceiling lamp light pools: subtle at day, warm glow at night */
+.office-container .pool {
+  opacity: 0.3;
+  transition: opacity 0.9s ease;
+}
+
+.office-container.td-night .pool {
+  opacity: 0.68;
+}
+
+/* Night veil overlay above the whole plan */
+.office-container .nightveil {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.office-container.td-night .nightveil {
+  opacity: 0.52;
+}
+
+/* Monitor / screen glow: brighter once the lights go out */
+.office-container .glowM {
+  opacity: 0.55;
+  transition: opacity 0.9s ease;
+}
+
+.office-container.td-night .glowM {
+  opacity: 0.95;
+}
+
+/* Hanging lamps are clickable (toggle day/night) */
+.office-container .td-lamp {
+  cursor: pointer;
+}
+
+/* ---------- Animations (static decor — not rebuilt every frame) ---------- */
+
+@keyframes td-sway {
+  0%, 100% { transform: rotate(-2.4deg); }
+  50% { transform: rotate(2.4deg); }
+}
+
+.td-sway {
+  animation: td-sway 4.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 85%;
+}
+
+@keyframes td-led-blink {
+  0%, 86%, 100% { opacity: 1; }
+  93% { opacity: 0.12; }
+}
+
+.td-led {
+  animation: td-led-blink 3.6s linear infinite;
+}
+
+@keyframes td-glow-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.td-glowP {
+  animation: td-glow-pulse 3s ease-in-out infinite;
+}
+
+/* ---------- Hover tooltip (shared with isometric mode) ---------- */
+
+#office-tooltip {
+  position: fixed;
+  display: none;
+  background: #26221c;
+  color: #f4ead2;
+  font-size: 12.5px;
+  line-height: 1.35;
+  padding: 6px 11px;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 90;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  max-width: 280px;
+}
