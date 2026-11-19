@@ -332,6 +332,178 @@ export class StateReconciler {
         metadata: payload,
         occurredAt: occurred_at
       });
+      return;
+    }
+
+    // G. Execution Failed (from run.failed SSE event)
+    if (event_type === 'agent.execution.failed') {
+      const errorMsg = payload.error || payload.message || 'Unknown execution failure';
+      const resultSummary = `Execution failed: ${errorMsg}`;
+
+      if (session_id) {
+        this.agentRepo.endSession(session_id, 'failed');
+      }
+
+      if (task_id) {
+        this.taskRepo.updateTaskStatus(task_id, 'failed', resultSummary);
+        const failedTask = this.taskRepo.getTaskById(task_id);
+        eventPublisher.publishTaskStatus(failedTask);
+      }
+
+      if (instance_id) {
+        this.agentRepo.updateInstanceStatus(instance_id, 'failed');
+        eventPublisher.publishAgentStatus(instance_id, 'failed');
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: 'execution.failed',
+        description: resultSummary,
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
+    }
+
+    // H. Execution Cancelled (from run.cancelled SSE event)
+    if (event_type === 'agent.execution.cancelled') {
+      const reason = payload.reason || payload.turn_exit_reason || 'Execution cancelled';
+
+      if (session_id) {
+        this.agentRepo.endSession(session_id, 'cancelled');
+      }
+
+      if (task_id) {
+        this.taskRepo.updateTaskStatus(task_id, 'cancelled', reason);
+        const cancelledTask = this.taskRepo.getTaskById(task_id);
+        eventPublisher.publishTaskStatus(cancelledTask);
+      }
+
+      if (instance_id) {
+        this.agentRepo.updateInstanceStatus(instance_id, 'idle');
+        eventPublisher.publishAgentStatus(instance_id, 'idle');
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: 'execution.cancelled',
+        description: `Execution cancelled: ${reason}`,
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
+    }
+
+    // I. Execution Steered (from run.steered SSE event - human intervention)
+    if (event_type === 'agent.execution.steered') {
+      const steerReason = payload.reason || payload.message || 'Execution steered by human';
+
+      if (instance_id) {
+        this.agentRepo.updateInstanceStatus(instance_id, 'waiting');
+        eventPublisher.publishAgentStatus(instance_id, 'waiting', { reason: 'steered' });
+      }
+
+      if (task_id) {
+        this.taskRepo.updateTaskStatus(task_id, 'waiting', `Steered: ${steerReason}`);
+        const steeredTask = this.taskRepo.getTaskById(task_id);
+        eventPublisher.publishTaskStatus(steeredTask);
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: 'execution.steered',
+        description: `Execution steered: ${steerReason}`,
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
+    }
+
+    // J. Approval Requested
+    if (event_type === 'agent.approval.requested') {
+      if (instance_id) {
+        this.agentRepo.updateInstanceStatus(instance_id, 'waiting');
+        eventPublisher.publishAgentStatus(instance_id, 'waiting', { reason: 'approval_required' });
+      }
+
+      if (task_id) {
+        const updatedTask = this.taskRepo.getTaskById(task_id);
+        eventPublisher.publishTaskStatus(updatedTask);
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: 'approval.requested',
+        description: `Approval requested: ${payload.description || payload.action_type || 'Sensitive operation'}`,
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
+    }
+
+    // K. Approval Resolved
+    if (event_type === 'agent.approval.resolved') {
+      const approved = payload.approved === true || payload.decision === 'approved';
+
+      if (approved) {
+        if (instance_id) {
+          this.agentRepo.updateInstanceStatus(instance_id, 'working');
+          eventPublisher.publishAgentStatus(instance_id, 'working');
+        }
+        if (task_id) {
+          this.taskRepo.updateTaskStatus(task_id, 'running');
+          const task = this.taskRepo.getTaskById(task_id);
+          eventPublisher.publishTaskStatus(task);
+        }
+      } else {
+        if (instance_id) {
+          this.agentRepo.updateInstanceStatus(instance_id, 'idle');
+          eventPublisher.publishAgentStatus(instance_id, 'idle');
+        }
+        if (task_id) {
+          this.taskRepo.updateTaskStatus(task_id, 'cancelled', 'Approval denied');
+          const task = this.taskRepo.getTaskById(task_id);
+          eventPublisher.publishTaskStatus(task);
+        }
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: approved ? 'approval.approved' : 'approval.denied',
+        description: approved ? 'Approval granted, execution resumed' : 'Approval denied, execution cancelled',
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
+    }
+
+    // L. Subagent Exited
+    if (event_type === 'agent.subagent.exited') {
+      if (instance_id) {
+        this.agentRepo.updateInstanceStatus(instance_id, 'working');
+        eventPublisher.publishAgentStatus(instance_id, 'working');
+      }
+
+      this._recordActivity({
+        agentInstanceId: instance_id,
+        sessionId: session_id,
+        taskId: task_id,
+        activityType: 'subagent.exited',
+        description: `Subagent finished: ${payload.subagent_role || payload.subagent_name || 'unknown'}`,
+        metadata: payload,
+        occurredAt: occurred_at
+      });
+      return;
     }
   }
 

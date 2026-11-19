@@ -97,12 +97,15 @@ export class HermesEventBridge {
 
     let currentLastEventId = lastEventId;
     let currentLastSeq = lastSeq;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5;
 
     logger.info({ runId }, 'Starting SSE event polling for run');
 
     while (!signal.aborted) {
       try {
         const events = await this._fetchRunEvents(runId, signal);
+        consecutiveErrors = 0;
         
         for (const event of events) {
           if (signal.aborted) break;
@@ -138,10 +141,42 @@ export class HermesEventBridge {
           if (last.id !== undefined) currentLastEventId = last.id;
         }
 
+        // Check for terminal events in this batch
+        const hasTerminalEvent = events.some(e => 
+          e.event === 'run.completed' || 
+          e.event === 'run.failed' || 
+          e.event === 'run.cancelled' ||
+          e.completed === true ||
+          e.failed === true ||
+          e.interrupted === true
+        );
+
+        if (hasTerminalEvent) {
+          logger.info({ runId }, 'Terminal event detected, stopping poll');
+          break;
+        }
+
       } catch (err) {
         if (err.name === 'AbortError') break;
-        logger.warn({ err, runId }, 'SSE polling error, retrying...');
-        await this._sleep(2000);
+        
+        consecutiveErrors++;
+        
+        // Non-retryable errors: stop polling
+        if (err.status && (err.status === 401 || err.status === 403 || err.status === 404)) {
+          logger.error({ err, runId, status: err.status }, 'Non-retryable SSE error, stopping poll');
+          break;
+        }
+        
+        // Too many consecutive errors: stop polling
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          logger.error({ err, runId, consecutiveErrors }, 'Too many consecutive SSE errors, stopping poll');
+          break;
+        }
+
+        // Retryable errors: exponential backoff
+        const backoffMs = Math.min(1000 * Math.pow(2, consecutiveErrors - 1), 30000);
+        logger.warn({ err, runId, retryIn: backoffMs }, 'SSE polling error, retrying with backoff...');
+        await this._sleep(backoffMs);
       }
 
       // Wait before next poll
@@ -166,7 +201,11 @@ export class HermesEventBridge {
     });
 
     if (!response.ok) {
-      throw new Error(`SSE fetch failed: ${response.status}`);
+      const status = response.status;
+      const error = new Error(`SSE fetch failed: ${status}`);
+      error.status = status;
+      error.retryable = status === 429 || status >= 500;
+      throw error;
     }
 
     const events = [];
@@ -217,30 +256,22 @@ export class HermesEventBridge {
    * Normalize SSE event to Bangron internal format.
    */
   _normalizeSSEEvent(event, runId) {
-    return {
-      event_type: event.event || event.type || 'unknown',
-      event_id: event.id || event.seq || `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      occurred_at: event.timestamp ? new Date(event.timestamp * 1000).toISOString() : new Date().toISOString(),
-      source: 'hermes-sse',
-      session_id: event.run_id || event.session_id,
-      agent_id: event.agent_id || null,
-      instance_id: event.instance_id || null,
-      task_id: event.task_id || event.metadata?.bangron_task_id || null,
-      payload: {
-        ...event,
-        run_id: event.run_id,
-        delta: event.delta,
-        seq: event.seq,
-        output: event.output,
-        usage: event.usage,
-        completed: event.completed,
-        failed: event.failed,
-        interrupted: event.interrupted,
-        turn_exit_reason: event.turn_exit_reason,
-        runtime: event.runtime,
-        seq: event.seq
-      }
-    };
+    // Use the event normalizer for consistent mapping
+    const normalized = normalizeHermesEvent({
+      ...event,
+      event: event.event || event.type,
+      run_id: event.run_id,
+      timestamp: event.timestamp,
+      metadata: event.metadata || {}
+    });
+    
+    // Associate with task using runId mapping
+    const taskId = this.runTaskMap.get(runId);
+    if (taskId && !normalized.task_id) {
+      normalized.task_id = taskId;
+    }
+    
+    return normalized;
   }
 
   /**
