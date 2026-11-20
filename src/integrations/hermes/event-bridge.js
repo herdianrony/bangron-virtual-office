@@ -8,7 +8,7 @@ import logger from '../../utils/logger.js';
  * and normalizes them into Bangron internal events for reconciliation.
  *
  * SSE Parsing:
- * - Handles both LF and CRLF line endings
+ * - Handles LF, CRLF, and standalone CR line endings
  * - Properly concatenates multiple data: lines per event
  * - Keeps SSE event ID as opaque string (no parseInt assumption)
  * - Processes events incrementally as delimiters are received
@@ -139,6 +139,14 @@ export class HermesEventBridge {
           break;
         }
 
+        if (result.reconnectNeeded) {
+          // Reconciliation failure - reconnect from last successful checkpoint
+          logger.warn({ runId, lastEventId: pollState.lastEventId, lastSeq: pollState.lastSeq },
+            'Reconciliation failed, will reconnect from last checkpoint');
+          // Don't break - the while loop will reconnect
+          continue;
+        }
+
         // Stream ended without terminal event (finite batch).
         // Wait before re-polling to check for new events.
         await this._sleep(this.pollInterval);
@@ -174,8 +182,9 @@ export class HermesEventBridge {
    * Fetch events from SSE endpoint and process each one incrementally
    * as soon as its delimiter is received.
    *
-   * Returns { terminated: boolean } — true if a terminal event was
-   * processed and polling should stop.
+   * Returns { terminated: boolean, reconnectNeeded: boolean } —
+   * terminated=true if a terminal event was processed and polling should stop.
+   * reconnectNeeded=true if reconciliation failed and we should reconnect from checkpoint.
    */
   async _fetchAndProcessRunEvents(runId, signal, pollState) {
     const headers = {
@@ -206,6 +215,8 @@ export class HermesEventBridge {
     const decoder = new TextDecoder();
     let buffer = '';
     let currentEvent = { dataLines: [] };
+    // Stateful line ending parser state
+    let lastCharWasCR = false;
 
     try {
       while (!signal.aborted) {
@@ -214,11 +225,11 @@ export class HermesEventBridge {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Split on LF, CR, or CRLF — handles all line ending styles.
-        // Keep any incomplete trailing line in the buffer so a delimiter
-        // fragmented across chunk boundaries is reassembled correctly.
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
+        // Stateful line ending parser: handles LF, CRLF, and standalone CR
+        // without losing delimiter state across chunk boundaries.
+        const { lines, lastCharWasCR: newLastCharWasCR, remainingBuffer } = this._parseLines(buffer, lastCharWasCR);
+        lastCharWasCR = newLastCharWasCR;
+        buffer = remainingBuffer;
 
         for (const rawLine of lines) {
           const line = rawLine;
@@ -237,11 +248,15 @@ export class HermesEventBridge {
                 );
                 if (status === 'terminal') {
                   currentEvent = { dataLines: [] };
-                  return { terminated: true };
+                  return { terminated: true, reconnectNeeded: false };
                 }
                 if (status === 'aborted') {
                   currentEvent = { dataLines: [] };
-                  return { terminated: false };
+                  return { terminated: false, reconnectNeeded: false };
+                }
+                if (status === 'reconnect') {
+                  currentEvent = { dataLines: [] };
+                  return { terminated: false, reconnectNeeded: true };
                 }
               }
             }
@@ -277,6 +292,40 @@ export class HermesEventBridge {
       // remaining buffered bytes, then release the reader.
       try {
         buffer += decoder.decode();
+        // Process any remaining lines after flush
+        const { lines, remainingBuffer } = this._parseLines(buffer, lastCharWasCR);
+        buffer = remainingBuffer;
+        for (const rawLine of lines) {
+          const line = rawLine;
+          if (line === '') {
+            if (
+              currentEvent.dataLines.length > 0 ||
+              currentEvent.eventType ||
+              currentEvent.id
+            ) {
+              const parsedEvent = this._parseSSEEvent(currentEvent);
+              if (parsedEvent) {
+                await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+              }
+            }
+            currentEvent = { dataLines: [] };
+            continue;
+          }
+          if (line.startsWith('id:')) {
+            currentEvent.id = line.slice(3).trim();
+          } else if (line.startsWith('event:')) {
+            currentEvent.eventType = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            currentEvent.dataLines.push(line.slice(5));
+          } else if (line.startsWith('retry:')) {
+            const retry = parseInt(line.slice(6).trim(), 10);
+            if (!isNaN(retry) && retry > 0) {
+              currentEvent.retry = retry;
+            }
+          } else if (line.startsWith(':')) {
+            continue;
+          }
+        }
       } catch (e) {
         // Ignore flush errors
       }
@@ -298,7 +347,62 @@ export class HermesEventBridge {
       }
     }
 
-    return { terminated: false };
+    return { terminated: false, reconnectNeeded: false };
+  }
+
+  /**
+   * Stateful line parser that handles LF, CRLF, and standalone CR.
+   * Returns { lines: string[], lastCharWasCR: boolean, remainingBuffer: string }.
+   */
+  _parseLines(input, lastCharWasCR) {
+    const lines = [];
+    let currentLine = '';
+    let i = 0;
+
+    // If previous chunk ended with CR, check if this chunk starts with LF
+    if (lastCharWasCR) {
+      if (input.length > 0 && input[0] === '\n') {
+        // CRLF split across chunks - the LF completes the CRLF
+        i = 1;
+      } else {
+        // Standalone CR - emit empty line as delimiter
+        lines.push('');
+      }
+    }
+
+    while (i < input.length) {
+      const ch = input[i];
+
+      if (ch === '\n') {
+        // LF found - end of line
+        lines.push(currentLine);
+        currentLine = '';
+      } else if (ch === '\r') {
+        // CR found - could be CRLF or standalone CR
+        if (i + 1 < input.length && input[i + 1] === '\n') {
+          // CRLF - consume both
+          lines.push(currentLine);
+          currentLine = '';
+          i++; // skip the LF
+        } else {
+          // Standalone CR - end of line
+          lines.push(currentLine);
+          currentLine = '';
+        }
+      } else {
+        currentLine += ch;
+      }
+      i++;
+    }
+
+    // Track if the last character was CR (for next chunk)
+    const newLastCharWasCR = input.length > 0 && input[input.length - 1] === '\r';
+
+    return {
+      lines,
+      lastCharWasCR: newLastCharWasCR,
+      remainingBuffer: currentLine
+    };
   }
 
   /**
@@ -306,7 +410,8 @@ export class HermesEventBridge {
    * tracking state, and invoke the onEvent callback.
    *
    * Returns 'terminal' if the event is terminal, 'aborted' if signal
-   * was aborted, 'ok' otherwise.
+   * was aborted, 'reconnect' if reconciliation failed (triggering reconnect),
+   * 'ok' otherwise.
    *
    * If reconciliation fails, the event is NOT considered processed and
    * lastEventId/lastSeq are NOT advanced.
@@ -355,11 +460,17 @@ export class HermesEventBridge {
           this.runTaskMap.delete(runId);
           return 'terminal';
         }
+      } else {
+        // Reconciliation returned non-processed status (duplicate, ignored, etc.)
+        // Don't advance tracking, but don't trigger reconnect either
+        logger.debug({ runId, eventId: parsedEvent.id, status: result.status }, 'Event not processed by reconciler');
       }
       return 'ok';
     } catch (err) {
-      logger.error({ err, runId, event: parsedEvent }, 'Failed to process SSE event');
-      return 'ok';
+      // Reconciliation FAILED - do NOT advance lastEventId/lastSeq
+      // Return 'reconnect' to trigger reconnect from last successful checkpoint
+      logger.error({ err, runId, event: parsedEvent }, 'Failed to reconcile SSE event - will reconnect from checkpoint');
+      return 'reconnect';
     }
   }
 
