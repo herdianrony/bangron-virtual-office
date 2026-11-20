@@ -236,6 +236,10 @@ export class HermesEventBridge {
     // Stateful line ending parser state
     let lastCharWasCR = false;
 
+    // Result accumulator — single exit point via finally
+    let result = { terminated: false, reconnectNeeded: false };
+    let readerReleased = false;
+
     try {
       while (!signal.aborted) {
         const { done, value } = await reader.read();
@@ -265,16 +269,19 @@ export class HermesEventBridge {
                   parsedEvent, runId, signal, pollState
                 );
                 if (status === 'terminal') {
+                  result = { terminated: true, reconnectNeeded: false };
                   currentEvent = { dataLines: [] };
-                  return { terminated: true, reconnectNeeded: false };
+                  return result; // reader released in finally
                 }
                 if (status === 'aborted') {
+                  result = { terminated: false, reconnectNeeded: false };
                   currentEvent = { dataLines: [] };
-                  return { terminated: false, reconnectNeeded: false };
+                  return result; // reader released in finally
                 }
                 if (status === 'reconnect') {
+                  result = { terminated: false, reconnectNeeded: true };
                   currentEvent = { dataLines: [] };
-                  return { terminated: false, reconnectNeeded: true };
+                  return result; // reader released in finally
                 }
               }
             }
@@ -305,14 +312,36 @@ export class HermesEventBridge {
       }
     } catch (err) {
       if (err.name !== 'AbortError') throw err;
+      // AbortError - result stays as default (terminated: false, reconnectNeeded: false)
     } finally {
+      // Single cleanup point for reader lock
+      if (!readerReleased) {
+        try {
+          reader.releaseLock();
+          readerReleased = true;
+        } catch (releaseErr) {
+          // Ignore releaseLock errors - log but don't mask original error
+          logger.debug({ err: releaseErr }, 'Reader releaseLock error (ignored)');
+        }
+      }
+
       // Decoder flush: final decode without stream:true to emit any
-      // remaining buffered bytes, then release the reader.
+      // remaining buffered bytes. Process any complete events from flush.
+      let flushBuffer = buffer;
       try {
-        buffer += decoder.decode();
-        // Process any remaining lines after flush
-        const { lines, remainingBuffer } = this._parseLines(buffer, lastCharWasCR);
-        buffer = remainingBuffer;
+        flushBuffer += decoder.decode(); // flush remaining bytes
+      } catch (decodeErr) {
+        // Decoder flush failure - do not advance any checkpoint
+        // Log and treat as recoverable failure (reconnect needed)
+        logger.error({ err: decodeErr, runId }, 'Decoder flush failed - will reconnect from last checkpoint');
+        result = { terminated: false, reconnectNeeded: true };
+      }
+
+      // Process any remaining lines after flush (only if no prior error set result)
+      if (!result.reconnectNeeded && !result.terminated) {
+        const { lines, remainingBuffer } = this._parseLines(flushBuffer, lastCharWasCR);
+        flushBuffer = remainingBuffer;
+
         for (const rawLine of lines) {
           const line = rawLine;
           if (line === '') {
@@ -324,15 +353,17 @@ export class HermesEventBridge {
               const parsedEvent = this._parseSSEEvent(currentEvent);
               if (parsedEvent) {
                 const status = await this._processParsedEvent(parsedEvent, runId, signal, pollState);
-                // Handle flush results properly - don't swallow them
                 if (status === 'terminal') {
-                  return { terminated: true, reconnectNeeded: false };
+                  result = { terminated: true, reconnectNeeded: false };
+                  break;
                 }
                 if (status === 'reconnect') {
-                  return { terminated: false, reconnectNeeded: true };
+                  result = { terminated: false, reconnectNeeded: true };
+                  break;
                 }
                 if (status === 'aborted') {
-                  return { terminated: false, reconnectNeeded: false };
+                  result = { terminated: false, reconnectNeeded: false };
+                  break;
                 }
               }
             }
@@ -349,44 +380,32 @@ export class HermesEventBridge {
             const retry = parseInt(line.slice(6).trim(), 10);
             if (!isNaN(retry) && retry > 0) {
               currentEvent.retry = retry;
+            } else if (line.startsWith(':')) {
+              continue;
             }
-          } else if (line.startsWith(':')) {
-            continue;
           }
         }
-      } catch (e) {
-        // Ignore flush errors but log them
-        logger.debug({ err: e }, 'Decoder flush error');
       }
-      // Process any event that didn't end with a delimiter
-      if (
-        !signal.aborted &&
-        (currentEvent.dataLines.length > 0 ||
-          currentEvent.eventType ||
-          currentEvent.id)
+
+      // Process any event that didn't end with a delimiter (final partial event)
+      if (!result.reconnectNeeded && !result.terminated && !signal.aborted &&
+        (currentEvent.dataLines.length > 0 || currentEvent.eventType || currentEvent.id)
       ) {
         const parsedEvent = this._parseSSEEvent(currentEvent);
         if (parsedEvent) {
           const status = await this._processParsedEvent(parsedEvent, runId, signal, pollState);
           if (status === 'terminal') {
-            return { terminated: true, reconnectNeeded: false };
-          }
-          if (status === 'reconnect') {
-            return { terminated: false, reconnectNeeded: true };
-          }
-          if (status === 'aborted') {
-            return { terminated: false, reconnectNeeded: false };
+            result = { terminated: true, reconnectNeeded: false };
+          } else if (status === 'reconnect') {
+            result = { terminated: false, reconnectNeeded: true };
+          } else if (status === 'aborted') {
+            result = { terminated: false, reconnectNeeded: false };
           }
         }
       }
-      try {
-        reader.releaseLock();
-      } catch (e) {
-        // Ignore releaseLock errors
-      }
     }
 
-    return { terminated: false, reconnectNeeded: false };
+    return result;
   }
 
   /**
