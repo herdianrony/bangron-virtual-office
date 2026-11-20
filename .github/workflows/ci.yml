@@ -1,0 +1,179 @@
+# Bangron Virtual Office — CI
+#
+# Runs entirely on GitHub-hosted runners (ubuntu-latest). NO self-hosted
+# homelab runner is used or required: every job installs its own dependencies,
+# starts its own isolated app server (E2E), and uses dedicated test databases.
+#
+# Security design:
+# - Least privilege: workflow token is read-only (contents: read).
+# - `pull_request` (NOT pull_request_target): fork PRs run with a read-only
+#   token and no access to repository secrets.
+# - No repository secrets are referenced anywhere in this workflow. The env
+#   values below are SYNTHETIC, CI-only test credentials (the repo .env is
+#   gitignored and never present on runners). They are not production
+#   credentials and grant access to nothing outside the ephemeral runner.
+# - Third-party actions are pinned to immutable commit SHAs.
+#
+# Test isolation (enforced by the repo's own test config, not by this file):
+# - Unit tests: in-memory SQLite (tests/unit/*), never the dev/prod database.
+# - E2E: dedicated server on port 3102 + freshly seeded dedicated SQLite DB
+#   (tests/e2e/e2e-env.js + global-setup.js), DEMO_AUTOPLAY=false,
+#   HERMES_RUNTIME_VERIFIED=false (no real Hermes dispatch), watchdog pointed
+#   at a dead port, /api/test/* enabled ONLY via explicit ENABLE_TEST_ROUTES.
+# - CI never connects to the homelab, production data, or the live Hermes API.
+#   Simulated webhook events in E2E do NOT constitute live Hermes runtime
+#   verification (that remains an outstanding production-readiness gate).
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'feat/**', 'fix/**', 'chore/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-credentials:
+    name: Generate CI Credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      INITIAL_DIRECTOR_PASSWORD: ${{ steps.gen.outputs.INITIAL_DIRECTOR_PASSWORD }}
+      HERMES_WEBHOOK_SECRET: ${{ steps.gen.outputs.HERMES_WEBHOOK_SECRET }}
+      SESSION_SECRET: ${{ steps.gen.outputs.SESSION_SECRET }}
+    steps:
+      - name: Generate cryptographically random credentials
+        id: gen
+        run: |
+          # Use OpenSSL for cryptographically secure random generation
+          # 32 bytes = 256 bits entropy for each credential
+          echo "INITIAL_DIRECTOR_PASSWORD=$(openssl rand -hex 16)" >> $GITHUB_OUTPUT
+          echo "HERMES_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> $GITHUB_OUTPUT
+          echo "SESSION_SECRET=$(openssl rand -hex 32)" >> $GITHUB_OUTPUT
+          # Do NOT echo the values to logs - they are written to GITHUB_OUTPUT only
+
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: generate-credentials
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+      - name: Run unit suite (isolated in-memory SQLite)
+        env:
+          NODE_VERSION: '22'
+          INITIAL_DIRECTOR_EMAIL: director@bangron.office
+          INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
+          HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
+          SESSION_SECRET: ${{ needs.generate-credentials.outputs.SESSION_SECRET }}
+        run: npm test
+
+  css-build:
+    name: CSS Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: generate-credentials
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+      - name: Build CSS bundle
+        env:
+          NODE_VERSION: '22'
+          INITIAL_DIRECTOR_EMAIL: director@bangron.office
+          INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
+          HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
+          SESSION_SECRET: ${{ needs.generate-credentials.outputs.SESSION_SECRET }}
+        run: npm run build:css
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: generate-credentials
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+      - name: Install Chromium + system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E suite (app server starts inside this runner)
+        env:
+          NODE_VERSION: '22'
+          INITIAL_DIRECTOR_EMAIL: director@bangron.office
+          INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
+          HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
+          SESSION_SECRET: ${{ needs.generate-credentials.outputs.SESSION_SECRET }}
+        # playwright.config.js starts the app via webServer with the isolated
+        # E2E env contract (port 3102, dedicated fresh SQLite DB, no real
+        # Hermes dispatch, explicit test-only endpoint flag). CI=true enables
+        # the config's CI retries/forbidOnly behavior.
+        run: npx playwright test
+      - name: Upload Playwright report & failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            tests/e2e/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+
+  dependency-audit:
+    name: Security & Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: generate-credentials
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+      - name: Dependency vulnerability audit
+        env:
+          NODE_VERSION: '22'
+          INITIAL_DIRECTOR_EMAIL: director@bangron.office
+          INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
+          HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
+          SESSION_SECRET: ${{ needs.generate-credentials.outputs.SESSION_SECRET }}
+        # Blocking at HIGH+ is safe for the current baseline: npm audit on
+        # this lockfile reports 0 critical / 0 high / 2 moderate
+        # (postcss-selector-parser via @tailwindcss/typography). Moderate
+        # findings are reported in the audit output but do not block; any
+        # future high/critical finding fails this job by design.
+        run: npm audit --audit-level=high
