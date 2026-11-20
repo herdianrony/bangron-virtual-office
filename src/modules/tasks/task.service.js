@@ -96,11 +96,21 @@ export class TaskService {
     let hermesRunId = null;
     if (dispatchResult.dispatched) {
       hermesRunId = dispatchResult.runId;
-      // Store the run_id in the task
+      // Validate run_id
+      if (!hermesRunId || typeof hermesRunId !== 'string') {
+        logger.error({ taskId, runId: hermesRunId }, 'Invalid run_id returned from Hermes dispatch');
+        throw new Error('Hermes returned invalid run_id');
+      }
+      // Store the run_id in the task FIRST — persist before starting polling
       this.taskRepo.setHermesRunId(taskId, hermesRunId);
       // Register run-to-task mapping for event correlation
       hermesEventBridge.registerRunTaskMapping(hermesRunId, taskId);
       logger.info({ taskId, hermesRunId }, 'Hermes run ID stored for task');
+      // Start EventBridge polling asynchronously (fire-and-forget)
+      // Do NOT await — HTTP request must not wait for SSE lifecycle
+      hermesEventBridge.startPolling(hermesRunId).catch((err) => {
+        logger.error({ err, taskId, hermesRunId }, 'EventBridge polling failed for run');
+      });
     } else {
       logger.warn({ taskId, reason: dispatchResult.reason }, 'Failed to dispatch task to Hermes');
     }
@@ -109,6 +119,7 @@ export class TaskService {
 
     // PHASE 3: Agent starts in 'queued' (Waiting avatar) until Hermes emits an
     // execution.started event — never infer 'working' without runtime evidence.
+    // This is persisted AFTER dispatch+run_id so any fast Hermes event sees the task in DB.
     this.agentRepo.updateInstanceStatus(agentInstanceId, 'queued');
     eventPublisher.publishAgentStatus(agentInstanceId, 'queued', { reason: 'task_assigned' });
 

@@ -7,7 +7,7 @@
 
 > **Calendar correction (v1.3, 2026-11-20):** Day 1–10 weekday labels were recomputed against the actual calendar (2026-11-20 is a **Friday**, not Thursday). Schedule dates, test sequence, and phase assignments are **unchanged**. The plan includes weekend days (Sat 2026-11-21, Sun 2026-11-22, Sat 2026-11-28); 2026-11-29/30 are not scheduled. The period end is Day 10 (Tue 2026-12-01), correcting the earlier 2026-12-04 header which did not match any scheduled day.
 
-> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Day/gate references below use this numbering.
+> **PR numbering (updated 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`); PR #3 = G6.1 Hermes EventBridge remediation (`fix/g6-hermes-eventbridge`); PR #4 = Phase 4; PR #5 = Phase 5; PR #6 = Phase 6; PR #7 = Phase 7. Day/gate references below use this numbering.
 
 ---
 

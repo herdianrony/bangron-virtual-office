@@ -157,17 +157,83 @@ sesi Director yang sudah login.
 ### 5.3 Resolusi identitas agen
 
 Wire format resmi tidak membawa `instance_id`. Office meresolusi dengan rantai:
+
 1. `instance_id` eksplisit (jika Hermes/adapter mengirim)
 2. `session_id` yang sudah dikenal (stickiness)
 3. `HERMES_PROFILE_AGENT_MAP` (env JSON: `{"nama-profil":"inst_xxx"}`)
 4. **Auto-provisioning** (aktif sejak 2026-11-19): jika `profile`/`agent_id` belum terdaftar,
    office otomatis membuat profil + instance + posisi kantor dengan **nama asli Hermes**
    (`inst_hermes_<slug>`; idempoten, sticky lintas event) dan menyiarkan `agent.created` via WS.
-5. `HERMES_DEFAULT_AGENT_ID` (default: `inst_demo_hermes`) — hanya bila tidak ada identitas sama sekali.
+5. `HERMES_DEFAULT_AGENT_ID` (default: **null**, tidak ada fallback ke `inst_demo_hermes`) — hanya
+   bila tidak ada identitas sama sekali **dan** env variabel secara eksplisit di-set.
+
+**G6.1 remediation:** fallback implisit ke `inst_demo_hermes` telah dihapus. Event Hermes
+yang identitas agennya tidak dapat diveresolusi akan dicatat tetapi tidak akan memperbarui
+status agen apa pun. Live events tidak akan pernah diam-diam mengupdate agent demo.
 
 Penempatan ruang otomatis dari heuristik nama (dev → room_dev, qa → room_qa, research →
 room_research, design/creative → room_creative, ui/ux → room_uiux, marketing → room_marketing,
 orchestrator/ops → room_ops, lainnya → room_lounge) dan mengambil workstation bebas di ruang tsb.
+
+### 5.6 EventBridge SSE Polling Lifecycle (G6.1)
+
+Bangron Virtual Office polling SSE dari Hermes API Server untuk menerima event lifecycle
+per run. Pipeline lengkap:
+
+```
+TaskService.assignAgent()
+  → hermesAdapter.dispatchTaskInstruction()    [POST /v1/runs]
+    → terima run_id dari Hermes
+  → taskRepo.setHermesRunId(taskId, runId)     [persist ke SQLite]
+  → hermesEventBridge.registerRunTaskMapping(runId, taskId)
+  → hermesEventBridge.startPolling(runId)      [async, fire-and-forget]
+    → _pollRunEvents() → _fetchRunEvents()     [SSE: GET /v1/runs/{runId}/events]
+      → parse SSE lines (id:/event:/data:, CRLF/LF, chunk boundaries)
+      → _normalizeSSEEvent()                   [Hermes event → internal schema]
+      → StateReconciler.reconcile()            [idempotent, transactional SQLite]
+        → eventPublisher.publish*()            [WebSocket broadcast ke frontend]
+    → terminal event (run.completed/failed/cancelled) → stop polling
+    → AbortController cleanup on stop/shutdown
+```
+
+**Implementasi:**
+- `startPolling(runId)` diimplementasikan di `src/integrations/hermes/event-bridge.js`
+- Dipanggil dari `TaskService.assignAgent()` setelah `registerRunTaskMapping()`
+- Tidak ada pemanggilan blocking — HTTP response tidak menunggu SSE selesai
+- Duplicate polling untuk run_id yang sama dicegah (activePolls Map)
+- Graceful shutdown: `hermesEventBridge.stopAll()` dipanggil saat SIGINT/SIGTERM
+
+**Startup Recovery (G6.1):**
+- Setelah server start, `recoverActiveHermesRuns(db)` query tasks dengan
+  `hermes_run_id` non-kosong dan status non-terminal
+- Rebuild run-to-task mapping dari SQLite, resume polling untuk run yang eligible
+- Idempotent; tidak reconstruct mapping menggunakan data demo
+
+**Status:**
+- ✅ Diimplementasikan (kode)
+- ✅ Unit/integration tested dengan mocks (tests/unit/g6-eventbridge.test.js)
+- ⚠️ Belum diverifikasi terhadap live Hermes API Server (Gate G6 outstanding)
+- ⚠️ Belum diverifikasi terhadap live Hermes runtime (HERMES_RUNTIME_VERIFIED=false)
+
+### 5.7 Call Chain Summary
+
+| Step | Component | File | Status |
+|------|-----------|------|--------|
+| 1. Task assignment | `TaskService.assignAgent()` | `src/modules/tasks/task.service.js` | ✅ Implemented |
+| 2. Hermes dispatch | `HermesAdapter.dispatchTaskInstruction()` | `src/integrations/hermes/adapter.js` | ✅ Implemented (guarded by HERMES_RUNTIME_VERIFIED) |
+| 3. Run ID persistence | `TaskRepository.setHermesRunId()` | `src/database/repositories/task.repository.js` | ✅ Implemented |
+| 4. Run-task mapping | `HermesEventBridge.registerRunTaskMapping()` | `src/integrations/hermes/event-bridge.js` | ✅ Implemented |
+| 5. SSE polling | `HermesEventBridge.startPolling()` | `src/integrations/hermes/event-bridge.js` | ✅ Implemented |
+| 6. Event normalization | `normalizeHermesEvent()` | `src/integrations/hermes/event-normalizer.js` | ✅ Implemented |
+| 7. State reconciliation | `StateReconciler.reconcile()` | `src/integrations/hermes/state-reconciler.js` | ✅ Implemented |
+| 8. SQLite persistence | `EventRepository.recordEvent()` | `src/database/repositories/event.repository.js` | ✅ Implemented |
+| 9. WebSocket broadcast | `eventPublisher.publish*()` | `src/realtime/event-publisher.js` | ✅ Implemented |
+| 10. Startup recovery | `recoverActiveHermesRuns()` | `src/server.js` | ✅ Implemented |
+| 11. Graceful shutdown | `hermesEventBridge.stopAll()` | `src/server.js` | ✅ Implemented |
+
+**Verification boundary:**
+- Steps 1-11: Unit/integration tested with mocks ✅
+- Steps 1-11: Verified against live Hermes runtime ⚠️ (Gate G6 outstanding, HERMES_RUNTIME_VERIFIED=false)
 
 ### 5.4 Registrasi agen sebelum event (opsional)
 
