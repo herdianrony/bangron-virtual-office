@@ -140,17 +140,22 @@ async function createAndAssignTask(page, agentId, label) {
 
 // HMAC-signed Hermes webhook via APIRequestContext. No session cookie needed
 // (signature-based contract); no manual Cookie headers are injected.
+// The timestamp lives INSIDE the signed body (S2 remediation: freshness is
+// cryptographically bound to the signed content). The legacy unix header is
+// kept and must match the body timestamp.
 async function sendHermesEvent(context, eventType, overrides = {}) {
+  const nowMs = Date.now();
   const payload = {
-    event_id: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    event_id: `e2e-${nowMs}-${Math.random().toString(36).slice(2)}`,
     event_type: eventType,
     agent_id: null,
     instance_id: null,
     task_id: null,
+    timestamp: new Date(nowMs).toISOString(),
     ...overrides
   };
   const rawBody = JSON.stringify(payload);
-  const timestamp = Math.floor(Date.now() / 1000);
+  const timestamp = Math.floor(nowMs / 1000);
   const signature = crypto.createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex');
   const res = await context.request.post('/api/integrations/hermes/events', {
     data: rawBody,

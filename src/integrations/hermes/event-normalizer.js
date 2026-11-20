@@ -1,4 +1,5 @@
 import { generateId } from '../../utils/crypto.js';
+import { parseEventTimestamp } from './event-timestamp.js';
 
 // Peta normalisasi nama event. Mencakup tiga sumber nama:
 // 1) Nama hook Gateway/klasik Hermes: agent:start, agent:step, agent:end,
@@ -55,7 +56,27 @@ export function normalizeHermesEvent(rawEvent) {
   if (typeof eventId === 'number') {
     eventId = String(eventId);
   }
-  const occurredAt = rawEvent.occurred_at || rawEvent.timestamp || rawEvent.timestamp ? new Date(rawEvent.timestamp * 1000).toISOString() : new Date().toISOString();
+  // Timestamp resolution (S3 remediation — deterministic, never silently wrong):
+  // - occurred_at wins over timestamp when both are present.
+  // - Supported formats: unix seconds, unix milliseconds, ISO-8601 with zone
+  //   (the native Hermes outbound-webhook format). See event-timestamp.js.
+  // - Missing timestamp → ingest time (internal/demo/SSE paths; the /events
+  //   webhook gate already requires a signed timestamp before normalization).
+  // - Invalid timestamp → throw (controller answers 400 MALFORMED_EVENT).
+  const rawTs =
+    rawEvent.occurred_at !== undefined && rawEvent.occurred_at !== null && rawEvent.occurred_at !== ''
+      ? rawEvent.occurred_at
+      : rawEvent.timestamp;
+  let occurredAt;
+  if (rawTs === undefined || rawTs === null || rawTs === '') {
+    occurredAt = new Date().toISOString();
+  } else {
+    const tsMs = parseEventTimestamp(rawTs);
+    if (tsMs === null) {
+      throw new Error(`Invalid event timestamp: ${JSON.stringify(rawTs)}`);
+    }
+    occurredAt = new Date(tsMs).toISOString();
+  }
   const source = rawEvent.source || 'hermes';
 
   const agentId = rawEvent.agent_id || rawEvent.agentId || rawEvent.profile_id || null;
