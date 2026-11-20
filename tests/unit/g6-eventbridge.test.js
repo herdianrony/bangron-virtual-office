@@ -1,49 +1,79 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { hermesEventBridge, HermesEventBridge } from '../../src/integrations/hermes/event-bridge.js';
 
-// Helper: create a mock SSE stream reader from event objects
-function createSSEReader(events, chunkSize = 50) {
+// Helper: create a controllable mock SSE stream reader
+// Allows tests to push chunks one at a time and observe state mid-stream.
+function createControllableSSEReader() {
   const encoder = new TextEncoder();
-  const eventStrings = events.map((e) => {
-    const parts = [];
-    if (e.id !== undefined) parts.push(`id: ${e.id}`);
-    if (e.event !== undefined) parts.push(`event: ${e.event}`);
-    if (e.data !== undefined) {
-      const dataStr = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
-      dataStr.split('\n').forEach((line) => parts.push(`data: ${line}`));
-    }
-    parts.push('');
-    return parts.join('\n');
-  });
-  const fullStream = eventStrings.join('');
   const chunks = [];
-  for (let i = 0; i < fullStream.length; i += chunkSize) {
-    chunks.push(fullStream.slice(i, i + chunkSize));
-  }
-  let index = 0;
+  let resolveRead = null;
+  let readWaiting = false;
+  let closed = false;
+  let released = false;
+
   return {
+    chunks,
+    push: (text) => {
+      chunks.push(encoder.encode(text));
+      if (readWaiting) {
+        readWaiting = false;
+        const r = resolveRead;
+        resolveRead = null;
+        r({ done: false, value: chunks.shift() });
+      }
+    },
+    close: () => {
+      closed = true;
+      if (readWaiting && chunks.length === 0) {
+        readWaiting = false;
+        const r = resolveRead;
+        resolveRead = null;
+        r({ done: true, value: null });
+      }
+    },
     getReader: () => ({
       read: () => {
-        if (index >= chunks.length) {
+        if (chunks.length > 0) {
+          return Promise.resolve({ done: false, value: chunks.shift() });
+        }
+        if (closed) {
           return Promise.resolve({ done: true, value: null });
         }
-        const chunk = encoder.encode(chunks[index++]);
-        return Promise.resolve({ done: false, value: chunk });
+        return new Promise((resolve) => {
+          readWaiting = true;
+          resolveRead = resolve;
+        });
       },
-      releaseLock: vi.fn()
+      releaseLock: () => {
+        released = true;
+      },
+      get released() {
+        return released;
+      }
     })
   };
 }
 
-// Helper: create a mock fetch response
-function createFetchMock(readerOrResponse) {
-  if (readerOrResponse.getReader) {
-    return vi.fn().mockResolvedValue({
-      ok: true,
-      body: { getReader: () => readerOrResponse.getReader() }
-    });
+// Helper: build SSE text from event objects
+function sseEvent(eventObj) {
+  const parts = [];
+  if (eventObj.id !== undefined) parts.push(`id: ${eventObj.id}`);
+  if (eventObj.event !== undefined) parts.push(`event: ${eventObj.event}`);
+  if (eventObj.data !== undefined) {
+    const dataStr = typeof eventObj.data === 'string' ? eventObj.data : JSON.stringify(eventObj.data);
+    dataStr.split('\n').forEach((line) => parts.push(`data: ${line}`));
   }
-  return vi.fn().mockResolvedValue(readerOrResponse);
+  parts.push('');
+  // SSE requires a blank line (\n\n) as event delimiter
+  return parts.join('\n') + '\n';
+}
+
+// Helper: create a mock fetch response from a controllable reader
+function createFetchFromReader(reader) {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    body: { getReader: () => reader.getReader() }
+  });
 }
 
 // Helper: create an error response mock
@@ -54,7 +84,14 @@ function createErrorFetchMock(status) {
   });
 }
 
-describe('G6.1 — Hermes EventBridge Remediation', () => {
+// Helper: create a bridge with a mock reconciler that records calls
+function createBridgeWithMockReconciler(options = {}) {
+  const mockReconciler = { reconcile: vi.fn().mockResolvedValue({ status: 'processed' }) };
+  const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: options.pollInterval || 50 });
+  return { bridge, mockReconciler };
+}
+
+describe('G6.1.2 — SSE Incremental Processing', () => {
   beforeEach(() => {
     hermesEventBridge.stopAll();
     vi.clearAllMocks();
@@ -74,11 +111,10 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
 
   describe('startPolling lifecycle', () => {
     it('should avoid duplicate polling for same run_id', async () => {
-      const response = {
-        ok: true,
-        body: createSSEMock('id: 1\nevent: agent.execution.started\ndata: {}\n\n')
-      };
-      global.fetch = createFetchMock(response);
+      const reader = createControllableSSEReader();
+      reader.push(sseEvent({ id: '1', event: 'agent.execution.started', data: {} }));
+      reader.close();
+      global.fetch = createFetchFromReader(reader);
 
       hermesEventBridge.startPolling('run_001');
       await new Promise((r) => setTimeout(r, 150));
@@ -91,36 +127,9 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
       hermesEventBridge.stopAll();
     });
 
-    it('should allow polling different run_ids concurrently', async () => {
-      const response = {
-        ok: true,
-        body: createSSEMock('id: 1\nevent: agent.execution.started\ndata: {}\n\n')
-      };
-      global.fetch = createFetchMock(response);
-
-      hermesEventBridge.startPolling('run_001');
-      hermesEventBridge.startPolling('run_002');
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(hermesEventBridge.activePolls.size).toBe(2);
-
-      hermesEventBridge.stopAll();
-    });
-
     it('should stop polling for a specific run_id', async () => {
-      let resolveRead;
-      const response = {
-        ok: true,
-        body: {
-          getReader: () => ({
-            read: () => new Promise((resolve) => {
-              resolveRead = resolve;
-            }),
-            releaseLock: vi.fn()
-          })
-        }
-      };
-      global.fetch = createFetchMock(response);
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
       hermesEventBridge.startPolling('run_001');
       await new Promise((r) => setTimeout(r, 150));
@@ -129,24 +138,18 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
       hermesEventBridge.stopPolling('run_001');
       await new Promise((r) => setTimeout(r, 50));
       expect(hermesEventBridge.activePolls.has('run_001')).toBe(false);
-
-      if (resolveRead) resolveRead({ done: true, value: null });
+      reader.close();
     });
 
     it('should stop all polling on stopAll()', async () => {
-      let resolveRead;
-      const response = {
-        ok: true,
-        body: {
-          getReader: () => ({
-            read: () => new Promise((resolve) => {
-              resolveRead = resolve;
-            }),
-            releaseLock: vi.fn()
-          })
-        }
-      };
-      global.fetch = createFetchMock(response);
+      const reader1 = createControllableSSEReader();
+      const reader2 = createControllableSSEReader();
+      let callCount = 0;
+      global.fetch = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return createFetchFromReader(reader1)();
+        return createFetchFromReader(reader2)();
+      });
 
       hermesEventBridge.startPolling('run_001');
       hermesEventBridge.startPolling('run_002');
@@ -156,14 +159,14 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
       hermesEventBridge.stopAll();
       expect(hermesEventBridge.activePolls.size).toBe(0);
 
-      if (resolveRead) resolveRead({ done: true, value: null });
+      reader1.close();
+      reader2.close();
     });
   });
 
   describe('SSE fetching error handling', () => {
     it('should stop polling on 401 Unauthorized (non-retryable)', async () => {
-      const response = { ok: false, status: 401 };
-      global.fetch = createFetchMock(response);
+      global.fetch = createErrorFetchMock(401);
 
       hermesEventBridge.startPolling('run_001');
       await new Promise((resolve) => setTimeout(resolve, 700));
@@ -172,8 +175,7 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
     });
 
     it('should stop polling on 404 Not Found (non-retryable)', async () => {
-      const response = { ok: false, status: 404 };
-      global.fetch = createFetchMock(response);
+      global.fetch = createErrorFetchMock(404);
 
       hermesEventBridge.startPolling('run_001');
       await new Promise((resolve) => setTimeout(resolve, 700));
@@ -182,8 +184,7 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
     });
 
     it('should stop polling on 403 Forbidden (non-retryable)', async () => {
-      const response = { ok: false, status: 403 };
-      global.fetch = createFetchMock(response);
+      global.fetch = createErrorFetchMock(403);
 
       hermesEventBridge.startPolling('run_001');
       await new Promise((resolve) => setTimeout(resolve, 700));
@@ -198,10 +199,10 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
         if (callCount === 1) {
           return Promise.resolve({ ok: false, status: 429 });
         }
-        return Promise.resolve({
-          ok: true,
-          body: createSSEMock('id: 1\nevent: run.completed\ndata: {}\n\n')
-        });
+        const reader = createControllableSSEReader();
+        reader.push(sseEvent({ id: '1', event: 'run.completed', data: {} }));
+        reader.close();
+        return createFetchFromReader(reader)();
       });
       global.fetch = fetchFn;
 
@@ -212,144 +213,288 @@ describe('G6.1 — Hermes EventBridge Remediation', () => {
     });
   });
 
-  describe('SSE incremental parsing — explicit event content verification', () => {
-    // Helper: create an EventBridge instance with a mock reconciler that always returns 'processed'
-    function createTestEventBridge() {
-      const mockReconciler = { reconcile: vi.fn().mockResolvedValue({ status: 'processed' }) };
-      return new HermesEventBridge({ reconciler: mockReconciler });
-    }
+  describe('Incremental processing — deterministic', () => {
+    it('should process event 1 while stream still open, before done:true', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
-    it('should parse LF line endings and verify event content', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_001', event: 'agent.execution.started', data: { task_id: 'task_1', agent_id: 'inst_1' } }
-      ]);
-      global.fetch = createFetchMock(reader);
+      const processedEvents = [];
+      bridge.registerRunTaskMapping('run_inc', 'task_inc');
 
-      const events = [];
-      bridge.startPolling('run_001', {
-        onEvent: (event) => events.push(event)
+      const pollingPromise = bridge.startPolling('run_inc', {
+        onEvent: (event) => processedEvents.push(event)
       });
 
+      // Push event 1 with delimiter — stream stays open (no close yet)
+      reader.push(sseEvent({
+        id: 'evt_1',
+        event: 'agent.execution.started',
+        data: { task_id: 'task_inc', agent_id: 'inst_1' }
+      }));
+
+      // Wait until the reconciler has been called for event 1
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (mockReconciler.reconcile.mock.calls.length >= 1) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 20);
+        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      });
+
+      // Event 1 must have been processed while stream still open
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+      expect(processedEvents[0].event_id).toBe('evt_1');
+
+      // Reader must NOT have returned done:true yet (stream still open)
+      expect(reader.getReader().released).toBe(false);
+
+      // Now push event 2
+      reader.push(sseEvent({
+        id: 'evt_2',
+        event: 'agent.execution.step',
+        data: { step: 1 }
+      }));
+
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (mockReconciler.reconcile.mock.calls.length >= 2) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 20);
+        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      });
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
+      expect(processedEvents.length).toBe(2);
+      expect(processedEvents[1].event_id).toBe('evt_2');
+
+      // Send terminal event
+      reader.push(sseEvent({
+        id: 'evt_term',
+        event: 'run.completed',
+        data: { status: 'completed' }
+      }));
+      reader.close();
+
       await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Polling should have stopped after terminal event
+      expect(bridge.activePolls.has('run_inc')).toBe(false);
+      // Mapping should be cleaned up
+      expect(bridge.getTaskIdForRun('run_inc')).toBeUndefined();
+
+      await pollingPromise.catch(() => {});
+    });
+
+    it('should handle decoder flush when stream ends without final newline', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
+
+      const processedEvents = [];
+      bridge.startPolling('run_flush', {
+        onEvent: (event) => processedEvents.push(event)
+      });
+
+      // Push event data WITHOUT final delimiter, then close —
+      // decoder flush at end should still process the remaining event
+      reader.push('id: evt_flush\nevent: agent.execution.started\ndata: {"task":"flush"}');
+      reader.close();
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+      expect(processedEvents[0].event_id).toBe('evt_flush');
+
       bridge.stopAll();
-
-      // Verify event was parsed with correct content
-      expect(events.length).toBeGreaterThan(0);
-      const firstEvent = events.find(e => e.event_id === 'evt_001');
-      expect(firstEvent).toBeDefined();
-      expect(firstEvent.event_type).toBe('agent.execution.started');
-      expect(firstEvent.payload).toBeDefined();
     });
 
-    it('should parse CRLF line endings', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_002', event: 'agent.execution.step', data: { msg: 'step 1' } }
-      ]);
-      global.fetch = createFetchMock(reader);
+    it('should abort polling and release reader when reader still open', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
-      const events = [];
-      bridge.startPolling('run_002', {
-        onEvent: (event) => events.push(event)
+      bridge.startPolling('run_abort');
+
+      // Let polling start and wait for reader
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Abort while reader is still open (no chunks pushed yet)
+      bridge.stopPolling('run_abort');
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(bridge.activePolls.has('run_abort')).toBe(false);
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(0);
+
+      reader.close();
+    });
+
+    it('should not consider event processed if reconciliation fails', async () => {
+      const mockReconciler = {
+        reconcile: vi.fn().mockRejectedValue(new Error('Reconciliation failed'))
+      };
+      const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
+
+      const processedEvents = [];
+      bridge.startPolling('run_fail', {
+        onEvent: (event) => processedEvents.push(event)
       });
 
+      reader.push(sseEvent({
+        id: 'evt_fail',
+        event: 'agent.execution.started',
+        data: { task_id: 'task_fail' }
+      }));
+      reader.close();
+
       await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Reconciliation was attempted
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      // But event was NOT passed to onEvent (not considered processed)
+      expect(processedEvents.length).toBe(0);
+
       bridge.stopAll();
-
-      expect(events.length).toBeGreaterThan(0);
-      const evt = events.find(e => e.event_id === 'evt_002');
-      expect(evt).toBeDefined();
-      expect(evt.event_type).toBe('agent.execution.step');
     });
 
-    it('should handle multiline data: fields concatenated with newline', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_003', event: 'agent.tool.started', data: { tool_name: 'write_file', tool_input: { path: 'src/file.js', content: 'line1\nline2' } } }
-      ]);
-      global.fetch = createFetchMock(reader);
+    it('should keep opaque SSE ID as string (no parseInt)', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
-      const events = [];
-      bridge.startPolling('run_003', {
-        onEvent: (event) => events.push(event)
+      const processedEvents = [];
+      bridge.startPolling('run_opaque', {
+        onEvent: (event) => processedEvents.push(event)
       });
 
+      reader.push(sseEvent({
+        id: 'uuid-abc-123-def-456',
+        event: 'run.completed',
+        data: { status: 'completed' }
+      }));
+      reader.close();
+
       await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+      expect(typeof processedEvents[0].event_id).toBe('string');
+      expect(processedEvents[0].event_id).toBe('uuid-abc-123-def-456');
+
       bridge.stopAll();
-
-      expect(events.length).toBeGreaterThan(0);
     });
 
-    it('should keep SSE event ID as opaque string', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'uuid-abc-123-def', event: 'run.completed', data: { status: 'completed' } }
-      ]);
-      global.fetch = createFetchMock(reader);
+    it('should handle CRLF line endings incrementally', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
-      const events = [];
-      bridge.startPolling('run_004', {
-        onEvent: (event) => events.push(event)
+      const processedEvents = [];
+      bridge.startPolling('run_crlf', {
+        onEvent: (event) => processedEvents.push(event)
       });
 
+      // Push CRLF-terminated event
+      reader.push('id: evt_crlf\r\nevent: agent.execution.started\r\ndata: {"msg":"hello"}\r\n\r\n');
+      reader.close();
+
       await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+      expect(processedEvents[0].event_id).toBe('evt_crlf');
+
       bridge.stopAll();
-
-      expect(events.length).toBeGreaterThan(0);
-      const evt = events.find(e => e.event_id === 'uuid-abc-123-def');
-      expect(evt).toBeDefined();
-      expect(typeof evt.event_id).toBe('string');
-      expect(evt.event_id).toBe('uuid-abc-123-def');
     });
 
-    it('should process events incrementally before stream ends', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_inc_1', event: 'agent.execution.started', data: { task_id: 'task_inc' } },
-        { id: 'evt_inc_2', event: 'agent.execution.step', data: { step: 1 } }
-      ], 10);
-      global.fetch = createFetchMock(reader);
+    it('should handle fragmented delimiter across chunk boundaries', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
 
-      const processedEventIds = [];
-      bridge.startPolling('run_inc', {
-        onEvent: (event) => processedEventIds.push(event.id)
+      const processedEvents = [];
+      bridge.startPolling('run_frag', {
+        onEvent: (event) => processedEvents.push(event)
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      bridge.stopPolling('run_inc');
+      // Push data in tiny fragments that split the delimiter mid-line
+      reader.push('id: evt_frag\n');
+      reader.push('event: agent.execution.started\n');
+      reader.push('data: {"');
+      reader.push('task":"frag"}');
+      reader.push('\n'); // completes the data line
+      reader.push('\n'); // empty line = delimiter
+      reader.close();
 
-      expect(processedEventIds.length).toBeGreaterThanOrEqual(0);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+      expect(processedEvents[0].event_id).toBe('evt_frag');
+
+      bridge.stopAll();
     });
 
-    it('should recognize terminal events and stop polling', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_term', event: 'run.completed', data: { status: 'completed' } }
-      ]);
-      global.fetch = createFetchMock(reader);
+    it('should process multiline data: fields concatenated with newline', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
+
+      const processedEvents = [];
+      bridge.startPolling('run_multiline', {
+        onEvent: (event) => processedEvents.push(event)
+      });
+
+      reader.push(sseEvent({
+        id: 'evt_multi',
+        event: 'agent.tool.started',
+        data: { tool_name: 'write_file', content: 'line1\nline2\nline3' }
+      }));
+      reader.close();
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+      expect(processedEvents.length).toBe(1);
+
+      bridge.stopAll();
+    });
+  });
+
+  describe('Terminal event lifecycle', () => {
+    it('should stop polling and clean up mapping after terminal event', async () => {
+      const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+      const reader = createControllableSSEReader();
+      global.fetch = createFetchFromReader(reader);
+
+      bridge.registerRunTaskMapping('run_term', 'task_term');
+      expect(bridge.getTaskIdForRun('run_term')).toBe('task_term');
 
       bridge.startPolling('run_term');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
 
+      reader.push(sseEvent({
+        id: 'evt_term',
+        event: 'run.completed',
+        data: { status: 'completed', task_id: 'task_term' }
+      }));
+      reader.close();
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
       expect(bridge.activePolls.has('run_term')).toBe(false);
-    });
+      expect(bridge.getTaskIdForRun('run_term')).toBeUndefined();
 
-    it('should clean up run-to-task mapping after terminal event', async () => {
-      const bridge = createTestEventBridge();
-      const reader = createSSEReader([
-        { id: 'evt_term_cleanup', event: 'run.completed', data: { status: 'completed', task_id: 'task_term_cleanup' } }
-      ]);
-      global.fetch = createFetchMock(reader);
-
-      bridge.registerRunTaskMapping('run_term_cleanup', 'task_term_cleanup');
-      expect(bridge.getTaskIdForRun('run_term_cleanup')).toBe('task_term_cleanup');
-
-      bridge.startPolling('run_term_cleanup');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      expect(bridge.getTaskIdForRun('run_term_cleanup')).toBeUndefined();
-      expect(bridge.activePolls.has('run_term_cleanup')).toBe(false);
+      bridge.stopAll();
     });
   });
 });

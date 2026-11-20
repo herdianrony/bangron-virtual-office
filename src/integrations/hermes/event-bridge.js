@@ -1,13 +1,12 @@
 import { hermesAdapter } from './adapter.js';
 import { normalizeHermesEvent } from './event-normalizer.js';
 import { StateReconciler } from './state-reconciler.js';
-import { getDatabase } from '../../database/connection.js';
 import logger from '../../utils/logger.js';
 
 /**
  * EventBridge — Polls Hermes API Server SSE endpoint for run events
  * and normalizes them into Bangron internal events for reconciliation.
- * 
+ *
  * SSE Parsing:
  * - Handles both LF and CRLF line endings
  * - Properly concatenates multiple data: lines per event
@@ -15,6 +14,13 @@ import logger from '../../utils/logger.js';
  * - Processes events incrementally as delimiters are received
  * - Supports Last-Event-ID for reconnection (if API supports)
  * - Respects AbortSignal and safely releases reader
+ *
+ * Endpoint contract: GET /v1/runs/{runId}/events returns text/event-stream.
+ * The stream may be finite (batch of events then close) or long-lived
+ * (continuous SSE). This implementation handles both: every event is
+ * processed as soon as its delimiter is received, without waiting for
+ * the stream to end. Last-Event-ID is sent on reconnect if previously
+ * observed; whether the Hermes API honors it is unverified.
  */
 export class HermesEventBridge {
   constructor(config = {}) {
@@ -22,7 +28,7 @@ export class HermesEventBridge {
     this.reconciler = config.reconciler || new StateReconciler();
     this.pollInterval = config.pollInterval || 5000;
     this.maxRetries = config.maxRetries || 3;
-    this.activePolls = new Map(); // runId -> { controller, taskId, lastEventId }
+    this.activePolls = new Map(); // runId -> { controller, taskId, lastEventId, lastSeq, onEvent }
     this.running = false;
     this.runTaskMap = new Map(); // runId -> taskId mapping
   }
@@ -60,6 +66,7 @@ export class HermesEventBridge {
       controller,
       taskId: null,
       lastEventId: options.lastEventId || null,
+      lastSeq: -1,
       onEvent: options.onEvent || (() => {})
     };
     this.activePolls.set(runId, pollState);
@@ -108,11 +115,6 @@ export class HermesEventBridge {
    * Processes events incrementally as SSE delimiters are received.
    */
   async _pollRunEvents(runId, signal, pollState, options = {}) {
-    const { 
-      lastSeq = -1 
-    } = options;
-
-    let currentLastSeq = lastSeq;
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 5;
 
@@ -126,104 +128,54 @@ export class HermesEventBridge {
 
     while (!signal.aborted) {
       try {
-        // Fetch and process events incrementally
-        const events = await this._fetchAndProcessRunEvents(runId, signal, pollState);
+        // Fetch and process events incrementally — each event is
+        // reconciled as soon as its delimiter is received, before
+        // reading the rest of the stream.
+        const result = await this._fetchAndProcessRunEvents(runId, signal, pollState);
         consecutiveErrors = 0;
-        
-        for (const event of events) {
-          if (signal.aborted) break;
-          
-          // Skip already processed events by seq
-          if (event.seq !== undefined && event.seq <= currentLastSeq) continue;
-          
-          // Normalize and reconcile
-          try {
-            const normalized = this._normalizeSSEEvent(event, runId);
-            
-            // Associate with task using runId mapping
-            const mappedTaskId = this.runTaskMap.get(runId);
-            if (mappedTaskId && !normalized.task_id) {
-              normalized.task_id = mappedTaskId;
-            }
-            
-            const result = await this._reconcileEvent(normalized);
-            
-            if (result.status === 'processed') {
-              pollState.onEvent(normalized);
-            }
-            
-            // Update last seen seq
-            if (event.seq !== undefined) {
-              currentLastSeq = event.seq;
-            }
-            // Update lastEventId for potential reconnection
-            if (event.id !== undefined) {
-              pollState.lastEventId = String(event.id);
-            }
-          } catch (err) {
-            logger.error({ err, runId, event }, 'Failed to process SSE event');
-          }
-        }
 
-        // Check for terminal events in this batch
-        const hasTerminalEvent = events.some(e => 
-          e.event === 'run.completed' || 
-          e.event === 'run.failed' || 
-          e.event === 'run.cancelled' ||
-          e.completed === true ||
-          e.failed === true ||
-          e.interrupted === true
-        );
-
-        if (hasTerminalEvent) {
-          logger.info({ runId }, 'Terminal event detected, stopping poll');
-          // Clean up mapping after terminal event
-          this.runTaskMap.delete(runId);
+        if (result.terminated) {
+          // Terminal event was processed and mapping cleaned up
           break;
         }
 
+        // Stream ended without terminal event (finite batch).
+        // Wait before re-polling to check for new events.
+        await this._sleep(this.pollInterval);
       } catch (err) {
         if (err.name === 'AbortError') break;
-        
+
         consecutiveErrors++;
-        
+
         // Non-retryable errors: stop polling
         if (err.status && (err.status === 401 || err.status === 403 || err.status === 404)) {
           logger.error({ err, runId, status: err.status }, 'Non-retryable SSE error, stopping poll');
-          // Clean up mapping on auth/not-found errors
           this.runTaskMap.delete(runId);
           break;
         }
-        
+
         // Too many consecutive errors: stop polling
         if (consecutiveErrors >= maxConsecutiveErrors) {
           logger.error({ err, runId, consecutiveErrors }, 'Too many consecutive SSE errors, stopping poll');
           break;
         }
-        
+
         // Retryable errors: exponential backoff
         const backoffMs = Math.min(1000 * Math.pow(2, consecutiveErrors - 1), 30000);
         logger.warn({ err, runId, retryIn: backoffMs, attempt: consecutiveErrors }, 'SSE polling error, retrying with backoff...');
         await this._sleep(backoffMs);
       }
-      
-      // Wait before next poll
-      await this._sleep(1000);
     }
 
     logger.info({ runId }, 'SSE event polling stopped');
   }
 
   /**
-   * Fetch events from SSE endpoint and parse incrementally.
-   * Returns array of fully parsed events.
-   * 
-   * SSE Format handling:
-   * - Lines separated by LF (\n) or CRLF (\r\n)
-   * - Multiple data: lines concatenated with \n before JSON parse
-   * - Event delimiter: empty line (after CRLF/LF normalization)
-   * - id: field kept as opaque string
-   * - retry: field for server-suggested reconnect delay
+   * Fetch events from SSE endpoint and process each one incrementally
+   * as soon as its delimiter is received.
+   *
+   * Returns { terminated: boolean } — true if a terminal event was
+   * processed and polling should stop.
    */
   async _fetchAndProcessRunEvents(runId, signal, pollState) {
     const headers = {
@@ -231,7 +183,7 @@ export class HermesEventBridge {
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache'
     };
-    
+
     // Add Last-Event-ID if we have one for resumption
     if (pollState.lastEventId) {
       headers['Last-Event-ID'] = pollState.lastEventId;
@@ -250,7 +202,6 @@ export class HermesEventBridge {
       throw error;
     }
 
-    const events = [];
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -262,20 +213,36 @@ export class HermesEventBridge {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        
-        // Split on both LF and CRLF
+
+        // Split on LF, CR, or CRLF — handles all line ending styles.
+        // Keep any incomplete trailing line in the buffer so a delimiter
+        // fragmented across chunk boundaries is reassembled correctly.
         const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const rawLine of lines) {
-          const line = rawLine; // Don't trim - SSE allows leading/trailing whitespace on field values
-          
+          const line = rawLine;
+
           if (line === '') {
             // Empty line = event delimiter
-            if (currentEvent.dataLines.length > 0 || currentEvent.eventType || currentEvent.id) {
+            if (
+              currentEvent.dataLines.length > 0 ||
+              currentEvent.eventType ||
+              currentEvent.id
+            ) {
               const parsedEvent = this._parseSSEEvent(currentEvent);
               if (parsedEvent) {
-                events.push(parsedEvent);
+                const status = await this._processParsedEvent(
+                  parsedEvent, runId, signal, pollState
+                );
+                if (status === 'terminal') {
+                  currentEvent = { dataLines: [] };
+                  return { terminated: true };
+                }
+                if (status === 'aborted') {
+                  currentEvent = { dataLines: [] };
+                  return { terminated: false };
+                }
               }
             }
             currentEvent = { dataLines: [] };
@@ -306,6 +273,24 @@ export class HermesEventBridge {
     } catch (err) {
       if (err.name !== 'AbortError') throw err;
     } finally {
+      // Decoder flush: final decode without stream:true to emit any
+      // remaining buffered bytes, then release the reader.
+      try {
+        buffer += decoder.decode();
+      } catch (e) {
+        // Ignore flush errors
+      }
+      if (
+        !signal.aborted &&
+        (currentEvent.dataLines.length > 0 ||
+          currentEvent.eventType ||
+          currentEvent.id)
+      ) {
+        const parsedEvent = this._parseSSEEvent(currentEvent);
+        if (parsedEvent) {
+          await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+        }
+      }
       try {
         reader.releaseLock();
       } catch (e) {
@@ -313,15 +298,69 @@ export class HermesEventBridge {
       }
     }
 
-    // Process any remaining event in buffer (if stream ended without final newline)
-    if ((currentEvent.dataLines.length > 0 || currentEvent.eventType || currentEvent.id) && !signal.aborted) {
-      const parsedEvent = this._parseSSEEvent(currentEvent);
-      if (parsedEvent) {
-        events.push(parsedEvent);
-      }
+    return { terminated: false };
+  }
+
+  /**
+   * Process a single parsed SSE event: normalize, reconcile, update
+   * tracking state, and invoke the onEvent callback.
+   *
+   * Returns 'terminal' if the event is terminal, 'aborted' if signal
+   * was aborted, 'ok' otherwise.
+   *
+   * If reconciliation fails, the event is NOT considered processed and
+   * lastEventId/lastSeq are NOT advanced.
+   */
+  async _processParsedEvent(parsedEvent, runId, signal, pollState) {
+    if (signal.aborted) return 'aborted';
+
+    // Skip already processed events by seq
+    if (parsedEvent.seq !== undefined && parsedEvent.seq <= pollState.lastSeq) {
+      return 'ok';
     }
 
-    return events;
+    try {
+      const normalized = this._normalizeSSEEvent(parsedEvent, runId);
+
+      // Associate with task using runId mapping
+      const mappedTaskId = this.runTaskMap.get(runId);
+      if (mappedTaskId && !normalized.task_id) {
+        normalized.task_id = mappedTaskId;
+      }
+
+      const result = await this._reconcileEvent(normalized);
+
+      if (result.status === 'processed') {
+        // Only advance tracking after successful reconciliation
+        pollState.onEvent(normalized);
+
+        if (parsedEvent.seq !== undefined) {
+          pollState.lastSeq = parsedEvent.seq;
+        }
+        if (parsedEvent.id !== undefined) {
+          pollState.lastEventId = String(parsedEvent.id);
+        }
+
+        // Check for terminal event
+        if (
+          parsedEvent.event === 'run.completed' ||
+          parsedEvent.event === 'run.failed' ||
+          parsedEvent.event === 'run.cancelled' ||
+          parsedEvent.completed === true ||
+          parsedEvent.failed === true ||
+          parsedEvent.interrupted === true
+        ) {
+          logger.info({ runId, event: parsedEvent.event }, 'Terminal event detected, stopping poll');
+          // Clean up mapping after terminal event
+          this.runTaskMap.delete(runId);
+          return 'terminal';
+        }
+      }
+      return 'ok';
+    } catch (err) {
+      logger.error({ err, runId, event: parsedEvent }, 'Failed to process SSE event');
+      return 'ok';
+    }
   }
 
   /**
@@ -336,7 +375,7 @@ export class HermesEventBridge {
 
     const dataStr = event.dataLines.join('\n');
     let data = {};
-    
+
     if (dataStr.trim()) {
       try {
         data = JSON.parse(dataStr);
@@ -366,7 +405,7 @@ export class HermesEventBridge {
       timestamp: event.timestamp,
       metadata: event.metadata || {}
     });
-    
+
     return normalized;
   }
 

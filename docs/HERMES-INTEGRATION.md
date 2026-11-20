@@ -177,7 +177,7 @@ orchestrator/ops → room_ops, lainnya → room_lounge) dan mengambil workstatio
 
 ### 5.6 EventBridge SSE Polling Lifecycle (G6.1)
 
-Bangron Virtual Office polling SSE dari Hermes API Server untuk menerima event lifecycle
+Bangkon Virtual Office polling SSE dari Hermes API Server untuk menerima event lifecycle
 per run. Pipeline lengkap:
 
 ```
@@ -187,14 +187,30 @@ TaskService.assignAgent()
   → taskRepo.setHermesRunId(taskId, runId)     [persist ke SQLite]
   → hermesEventBridge.registerRunTaskMapping(runId, taskId)
   → hermesEventBridge.startPolling(runId)      [async, fire-and-forget]
-    → _pollRunEvents() → _fetchRunEvents()     [SSE: GET /v1/runs/{runId}/events]
-      → parse SSE lines (id:/event:/data:, CRLF/LF, chunk boundaries)
+    → _pollRunEvents() → _fetchAndProcessRunEvents()  [SSE: GET /v1/runs/{runId}/events]
+      → parse SSE lines incrementally (id:/event:/data:, CRLF/LF, chunk boundaries)
+      → each event normalized + reconciled immediately after delimiter
+      → lastEventId updated only after successful reconciliation
       → _normalizeSSEEvent()                   [Hermes event → internal schema]
       → StateReconciler.reconcile()            [idempotent, transactional SQLite]
         → eventPublisher.publish*()            [WebSocket broadcast ke frontend]
-    → terminal event (run.completed/failed/cancelled) → stop polling
+    → terminal event (run.completed/failed/cancelled) → stop polling + clean mapping
     → AbortController cleanup on stop/shutdown
 ```
+
+**Endpoint contract (SSE):**
+- `GET /v1/runs/{runId}/events` returns `text/event-stream`
+- Stream may be **finite** (batch of events then close) or **long-lived** (continuous)
+  — implementation handles both without assuming either
+- Events processed **incrementally** as each SSE delimiter is received; does not wait
+  for stream to end before reconciliation
+- SSE event ID kept as **opaque string**; no `parseInt` without API contract proof
+- `Last-Event-ID` header sent on reconnect if previously observed; whether Hermes API
+  honors it is **unverified** (no assumed support)
+- Non-retryable errors (401/403/404): stop polling, clean up mapping
+- Retryable errors (429/5xx): exponential backoff, max 5 consecutive errors
+- Decoder flushed with `decoder.decode()` at end of stream
+- AbortSignal respected; reader safely released via `releaseLock()`
 
 **Implementasi:**
 - `startPolling(runId)` diimplementasikan di `src/integrations/hermes/event-bridge.js`
