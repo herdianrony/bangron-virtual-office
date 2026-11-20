@@ -57,16 +57,18 @@ export function normalizeHermesEvent(rawEvent) {
     eventId = String(eventId);
   }
   // Timestamp resolution (S3 remediation — deterministic, never silently wrong):
-  // - occurred_at wins over timestamp when both are present.
+  // - timestamp (native Hermes field) wins over occurred_at when both are present.
+  //   This matches the validator's precedence so freshness validation and
+  //   persisted timestamp are identical.
   // - Supported formats: unix seconds, unix milliseconds, ISO-8601 with zone
   //   (the native Hermes outbound-webhook format). See event-timestamp.js.
   // - Missing timestamp → ingest time (internal/demo/SSE paths; the /events
   //   webhook gate already requires a signed timestamp before normalization).
   // - Invalid timestamp → throw (controller answers 400 MALFORMED_EVENT).
   const rawTs =
-    rawEvent.occurred_at !== undefined && rawEvent.occurred_at !== null && rawEvent.occurred_at !== ''
-      ? rawEvent.occurred_at
-      : rawEvent.timestamp;
+    rawEvent.timestamp !== undefined && rawEvent.timestamp !== null && rawEvent.timestamp !== ''
+      ? rawEvent.timestamp
+      : rawEvent.occurred_at;
   let occurredAt;
   if (rawTs === undefined || rawTs === null || rawTs === '') {
     occurredAt = new Date().toISOString();

@@ -99,13 +99,13 @@ describe('normalizeHermesEvent — occurred_at / timestamp resolution (S3)', () 
     expect(out.occurred_at).toBe(new Date(Date.UTC(2026, 10, 20, 5, 30, 0, 123)).toISOString());
   });
 
-  it('gives occurred_at precedence over timestamp when both are present', () => {
+  it('gives timestamp precedence over occurred_at when both are present', () => {
     const out = normalizeHermesEvent({
       ...BASE,
-      occurred_at: '2026-11-20T05:30:00Z',
-      timestamp: 1000000000
+      timestamp: 1763600000, // 2025-11-20T05:33:20Z
+      occurred_at: '2026-11-20T05:30:00Z' // different timestamp
     });
-    expect(out.occurred_at).toBe(new Date(Date.UTC(2026, 10, 20, 5, 30, 0)).toISOString());
+    expect(out.occurred_at).toBe(new Date(1763600000 * 1000).toISOString());
   });
 
   it('falls back to ingest time ONLY when no timestamp is provided (internal/demo/SSE paths)', () => {

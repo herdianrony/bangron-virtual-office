@@ -282,6 +282,19 @@ describe('Hermes webhook security — S1 status authorization + S2 replay protec
       const res = await signedPost('/api/integrations/hermes/events', payload);
       expect(res.status).toBe(200);
     });
+
+    it('uses timestamp (not occurred_at) for freshness and persistence when both are present with different values', async () => {
+      const tsMs = Date.now() - 60000; // 1 minute ago (within drift window)
+      const payload = nativePayload({
+        timestamp: new Date(tsMs).toISOString(),
+        occurred_at: new Date(tsMs + 120000).toISOString() // 2 minutes in the future (different)
+      });
+      const res = await signedPost('/api/integrations/hermes/events', payload);
+      expect(res.status).toBe(200);
+      // The persisted event should have the timestamp's value, not occurred_at's
+      const row = new EventRepository(db).findByEventId(payload.delivery_id);
+      expect(row.occurred_at).toBe(new Date(tsMs).toISOString());
+    });
   });
 
   describe('S2 — /agents registration boundary (signature-only, idempotent)', () => {
