@@ -78,7 +78,14 @@ export class TaskService {
     }
 
     // Build instruction for Hermes
-    const instruction = `Task: ${task.title}\n\nDescription: ${task.description || 'No description provided.'}\n\nPriority: ${task.priority}\nAssigned Agent: ${agent.display_name} (${agent.profile_name})\n\nPlease execute this task and provide a summary of the work completed.`;
+    const instruction = `Task: ${task.title}\\n\\nDescription: ${task.description || 'No description provided.'}\\n\\nPriority: ${task.priority}\\nAssigned Agent: ${agent.display_name} (${agent.profile_name})\\n\\nPlease execute this task and provide a summary of the work completed.`;
+
+    // PERSIST ASSIGNMENT AND QUEUED STATUS FIRST — before dispatch
+    // This ensures any fast Hermes event sees the task in DB with correct initial state.
+    const updatedTask = this.taskRepo.assignAgent(taskId, agentInstanceId);
+    this.agentRepo.updateInstanceStatus(agentInstanceId, 'queued');
+    eventPublisher.publishAgentStatus(agentInstanceId, 'queued', { reason: 'task_assigned' });
+    eventPublisher.publishTaskStatus(updatedTask);
 
     // Dispatch to Hermes
     const agentProfile = {
@@ -96,12 +103,13 @@ export class TaskService {
     let hermesRunId = null;
     if (dispatchResult.dispatched) {
       hermesRunId = dispatchResult.runId;
-      // Validate run_id
-      if (!hermesRunId || typeof hermesRunId !== 'string') {
+      // Validate run_id — reject empty string, whitespace, non-string
+      if (!hermesRunId || typeof hermesRunId !== 'string' || hermesRunId.trim() === '') {
         logger.error({ taskId, runId: hermesRunId }, 'Invalid run_id returned from Hermes dispatch');
         throw new Error('Hermes returned invalid run_id');
       }
-      // Store the run_id in the task FIRST — persist before starting polling
+      hermesRunId = hermesRunId.trim();
+      // Store the run_id in the task (after assignment already persisted)
       this.taskRepo.setHermesRunId(taskId, hermesRunId);
       // Register run-to-task mapping for event correlation
       hermesEventBridge.registerRunTaskMapping(hermesRunId, taskId);
@@ -114,14 +122,6 @@ export class TaskService {
     } else {
       logger.warn({ taskId, reason: dispatchResult.reason }, 'Failed to dispatch task to Hermes');
     }
-
-    const updatedTask = this.taskRepo.assignAgent(taskId, agentInstanceId);
-
-    // PHASE 3: Agent starts in 'queued' (Waiting avatar) until Hermes emits an
-    // execution.started event — never infer 'working' without runtime evidence.
-    // This is persisted AFTER dispatch+run_id so any fast Hermes event sees the task in DB.
-    this.agentRepo.updateInstanceStatus(agentInstanceId, 'queued');
-    eventPublisher.publishAgentStatus(agentInstanceId, 'queued', { reason: 'task_assigned' });
 
     // PHASE 3: Assign the agent to their profile's default workstation and plot
     // a corridor-safe walking route so the frontend walks them there over WS.

@@ -5,7 +5,7 @@
 Hermes Agent serves as the AI Agent Runtime and Orchestrator. Bangron Virtual Office acts as:
 - Control Plane
 - Persistent State Layer (SQLite)
-- Visual Representation Layer (2.5D Isometric SVG)
+- Visual Representation Layer (Realistic 2D Top-Down Virtual Office SVG)
 - Approval Gatekeeper
 
 The backend does NOT re-implement Hermes' internal LLM prompting or tool routing. Instead, it interacts via:

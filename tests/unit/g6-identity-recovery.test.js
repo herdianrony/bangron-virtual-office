@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../src/database/migrations/runner.js';
 import { seedInitialOffice } from '../../src/database/seeds/initial_office.js';
 import { StateReconciler } from '../../src/integrations/hermes/state-reconciler.js';
 import { AgentRepository } from '../../src/database/repositories/agent.repository.js';
 import { TaskRepository } from '../../src/database/repositories/task.repository.js';
+import { recoverActiveHermesRuns } from '../../src/server.js';
+import { hermesEventBridge } from '../../src/integrations/hermes/event-bridge.js';
 
 describe('G6.1 — StateReconciler Agent Identity Safety', () => {
   let db;
@@ -293,5 +295,117 @@ describe('G6.1 — EventBridge Restart Recovery from SQLite', () => {
     `).all(...terminalStatuses);
 
     expect(activeTasks.length).toBe(0);
+  });
+});
+
+describe('G6.1 — Startup Recovery via Dependency Injection', () => {
+  let db;
+  let taskRepo;
+
+  beforeEach(async () => {
+    db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    runMigrations(db);
+    await seedInitialOffice(db);
+
+    taskRepo = new TaskRepository(db);
+    hermesEventBridge.stopAll();
+  });
+
+  afterEach(() => {
+    if (db) db.close();
+    hermesEventBridge.stopAll();
+  });
+
+  it('should recover active runs and call startPolling via real function', async () => {
+    const t1 = taskRepo.createTask({ id: 'task_recover_1', title: 'Recover 1' });
+    taskRepo.setHermesRunId(t1.id, 'hermes_run_recover_1');
+    taskRepo.updateTaskStatus(t1.id, 'running');
+
+    const t2 = taskRepo.createTask({ id: 'task_recover_2', title: 'Recover 2' });
+    taskRepo.setHermesRunId(t2.id, 'hermes_run_recover_2');
+    taskRepo.updateTaskStatus(t2.id, 'queued');
+
+    // Terminal run must NOT be recovered
+    const t3 = taskRepo.createTask({ id: 'task_recover_terminal', title: 'Terminal' });
+    taskRepo.setHermesRunId(t3.id, 'hermes_run_terminal');
+    taskRepo.updateTaskStatus(t3.id, 'completed');
+
+    // Run without hermes_run_id must NOT be recovered
+    const t4 = taskRepo.createTask({ id: 'task_recover_no_run', title: 'No run id' });
+    taskRepo.updateTaskStatus(t4.id, 'running');
+
+    // Spy on startPolling to verify it's called for active runs only
+    const startPollingSpy = vi.spyOn(hermesEventBridge, 'startPolling');
+
+    const result = await recoverActiveHermesRuns(db);
+
+    expect(result.recovered.length).toBe(2);
+    expect(result.recovered.map(r => r.taskId).sort()).toEqual(['task_recover_1', 'task_recover_2']);
+    expect(result.skipped.length).toBe(0);
+
+    // startPolling called for each active run
+    expect(startPollingSpy).toHaveBeenCalledWith('hermes_run_recover_1');
+    expect(startPollingSpy).toHaveBeenCalledWith('hermes_run_recover_2');
+
+    // Not called for terminal or no-run tasks
+    expect(startPollingSpy).not.toHaveBeenCalledWith('hermes_run_terminal');
+
+    startPollingSpy.mockRestore();
+  });
+
+  it('should skip tasks with invalid run_id but continue recovery for others', async () => {
+    const t1 = taskRepo.createTask({ id: 'task_skip_1', title: 'Skip 1' });
+    taskRepo.setHermesRunId(t1.id, '   '); // whitespace-only run_id
+    taskRepo.updateTaskStatus(t1.id, 'running');
+
+    const t2 = taskRepo.createTask({ id: 'task_skip_2', title: 'Skip 2' });
+    taskRepo.setHermesRunId(t2.id, 'hermes_run_skip_2');
+    taskRepo.updateTaskStatus(t2.id, 'queued');
+
+    const result = await recoverActiveHermesRuns(db);
+
+    expect(result.recovered.length).toBe(1);
+    expect(result.recovered[0].taskId).toBe('task_skip_2');
+    expect(result.skipped.length).toBe(1);
+    expect(result.skipped[0].reason).toBe('invalid_run_id');
+  });
+
+  it('should not fail entire recovery when one run startPolling throws', async () => {
+    const t1 = taskRepo.createTask({ id: 'task_fail_1', title: 'Fail 1' });
+    taskRepo.setHermesRunId(t1.id, 'hermes_run_fail_1');
+    taskRepo.updateTaskStatus(t1.id, 'running');
+
+    const t2 = taskRepo.createTask({ id: 'task_fail_2', title: 'Fail 2' });
+    taskRepo.setHermesRunId(t2.id, 'hermes_run_fail_2');
+    taskRepo.updateTaskStatus(t2.id, 'queued');
+
+    // Make startPolling throw for t1 but succeed for t2
+    const startPollingSpy = vi.spyOn(hermesEventBridge, 'startPolling');
+    startPollingSpy.mockImplementation((runId, options) => {
+      if (runId === 'hermes_run_fail_1') {
+        return Promise.reject(new Error('boom'));
+      }
+      return Promise.resolve();
+    });
+
+    const result = await recoverActiveHermesRuns(db);
+
+    expect(result.recovered.length).toBe(2);
+    expect(result.recovered.map(r => r.taskId).sort()).toEqual(['task_fail_1', 'task_fail_2']);
+
+    startPollingSpy.mockRestore();
+  });
+
+  it('should return empty recovery when no active runs exist', async () => {
+    // Only terminal tasks
+    const t1 = taskRepo.createTask({ id: 'task_empty_1', title: 'Empty 1' });
+    taskRepo.setHermesRunId(t1.id, 'run_empty_1');
+    taskRepo.updateTaskStatus(t1.id, 'completed');
+
+    const result = await recoverActiveHermesRuns(db);
+
+    expect(result.recovered.length).toBe(0);
+    expect(result.skipped.length).toBe(0);
   });
 });
