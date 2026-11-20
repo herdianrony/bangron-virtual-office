@@ -3,8 +3,9 @@
 **Project:** Bangron Virtual Office
 **Repository:** https://github.com/herdianrony/bangron-virtual-office
 **Working Branch:** `fix/security-hardening`
-**Target:** 10 working days (Mon 2026-11-20 → Fri 2026-12-04)
-**Current HEAD:** `5a23e358cf7ae936d9f87fa45af130607fa1fe9c` (docs: PR numbering alignment; tested code SHA for Phase 3.2.2 evidence: `22d66b6`)
+**Target:** 10 scheduled days (Fri 2026-11-20 → Tue 2026-12-01)
+**Current HEAD (documentation):** `d285fff58e159447370c4ea9656f08f932f1e319` (docs: sync roadmap and test schedule with verified Phase 3.2.2 and CI evidence). This is a documentation-only commit — it was NOT tested as application code.
+**Tested code SHA (Phase 3.2.2 evidence):** `22d66b69ccccb12004d855432f9c90c3feff270f` — all Phase 3.2.2 test evidence binds to this commit; CI re-verification ran at `5d56112` (PR #2). The two SHAs are distinct pieces of evidence.
 **Current PR:** #1 — Security hardening and top-down visual foundation (DRAFT, OPEN — ready for Director review; merge awaits explicit approval). PR #2 (GitHub Actions CI, head `5d56112`) is stacked on PR #1; both unmerged; `main` at `82fc1f6`.
 
 > **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Task references below use this numbering.
@@ -265,6 +266,6 @@ At end of each working day, update this file and post PR comment:
 
 ---
 
-**Last Updated:** 2026-11-20 12:14 WIB (evidence synchronization; PR numbering revision 11:44 WIB; original plan 2026-11-20 03:45 WIB)
+**Last Updated:** 2026-11-20 12:35 WIB (documentation accuracy fix: HEAD field split into documentation HEAD vs tested code SHA; calendar weekday/period correction). Previous: 2026-11-20 12:14 WIB evidence synchronization; PR numbering revision 11:44 WIB; original plan 2026-11-20 03:45 WIB
 **Next Review:** End of Day 1 (2026-11-20)
 **Main Agent:** Hermes (Project Manager & QA Coordinator)

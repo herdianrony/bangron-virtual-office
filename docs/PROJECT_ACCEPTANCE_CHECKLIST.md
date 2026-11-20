@@ -46,7 +46,7 @@ Each gate requires: **implementation + tests passing + Director approval**.
 - [x] **3.2.5** Test-only endpoints (`/api/test/*`) secured — only in dev, auth + director required *(verified: explicit `ENABLE_TEST_ROUTES=true` + non-production + director session + CSRF; production hard-lock 404 unit-tested)*
 - [x] **3.2.6** All unit & integration tests pass — **98 passed / 0 failed / 0 skipped** (13 files). *Supersedes the original target "48 unit tests (27 baseline + 22 Phase 3)"; the suite was expanded during Phase 3.2.2.*
 - [x] **3.2.7** All Playwright E2E tests pass — **10 passed / 0 failed / 0 skipped** (5 Phase 3.1 smoke + 5 Phase 3.2 lifecycle). *Supersedes the original target "13 E2E (5 Phase 3.1 + 6 Phase 3.2 + 2 debug)"; the suite was restructured and debug scenarios removed.*
-- [x] **3.2.8** PR #1 updated with passing evidence *(PR #1 body contains the full Phase 3.2.2 report; tested SHA `22d66b69ccccb12004d855432f9c90c3feff270f` == PR #1 HEAD at the time of testing; later HEAD advances `f8f235d`, `5a23e35` are documentation-only)*
+- [x] **3.2.8** PR #1 updated with passing evidence *(PR #1 body contains the full Phase 3.2.2 report; tested SHA `22d66b69ccccb12004d855432f9c90c3feff270f` == PR #1 HEAD at the time of testing; later HEAD advances `f8f235d`, `5a23e35`, `d285fff` are documentation-only)*
 
 ### Verified Test Evidence — Phase 3.2.2 (historical, commit `22d66b6`)
 
@@ -330,7 +330,7 @@ map 1:1 to the current suite layout.
 | Security final | Manual + automated | 0 findings | | ⏳ |
 | Docs review | `ls docs/` | Complete | | ⏳ |
 | RC tag CI | `git tag v1.0.0-rc.1` | CI green | | ⏳ |
-| PR merges | `gh pr merge` (×5) | All merged | | ⏳ |
+| PR merges | `gh pr merge` (×6 — PRs #1–#6) | All merged | | ⏳ |
 | Prod deploy | `./scripts/deploy.sh production` | Health checks pass | | ⏳ |
 | Post-deploy smoke | `npx playwright test --project=production --grep "smoke"` | All pass | | ⏳ |
 | Monitoring check | Grafana/Prometheus | Alerts firing, logs | | ⏳ |

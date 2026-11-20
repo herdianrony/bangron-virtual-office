@@ -1,9 +1,11 @@
 # Bangron Virtual Office — Test Execution Schedule
 
 **Project:** Bangron Virtual Office
-**Acceleration Period:** 10 Working Days (2026-11-20 → 2026-12-04)
-**Schedule Version:** 1.2
+**Acceleration Period:** 10 Scheduled Days (Fri 2026-11-20 → Tue 2026-12-01)
+**Schedule Version:** 1.3
 **Timezone:** WIB (UTC+07:00)
+
+> **Calendar correction (v1.3, 2026-11-20):** Day 1–10 weekday labels were recomputed against the actual calendar (2026-11-20 is a **Friday**, not Thursday). Schedule dates, test sequence, and phase assignments are **unchanged**. The plan includes weekend days (Sat 2026-11-21, Sun 2026-11-22, Sat 2026-11-28); 2026-11-29/30 are not scheduled. The period end is Day 10 (Tue 2026-12-01), correcting the earlier 2026-12-04 header which did not match any scheduled day.
 
 > **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Day/gate references below use this numbering.
 
@@ -26,7 +28,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ## Daily Test Schedule (Days 1–10)
 
-### Day 1 — 2026-11-20 (Thursday) — Phase 3.2 Stabilization
+### Day 1 — 2026-11-20 (Friday) — Phase 3.2 Stabilization
 
 **Status: ✅ Executed 2026-11-20 at commit `22d66b6` (98 unit/integration + 10 E2E + CSS build); CI re-verified at `5d56112`, run 44670861607. Original subset counts below are superseded where labeled.**
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
@@ -45,7 +47,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 2 — 2026-11-21 (Friday) — Phase 4: Approval Workflow (Part 1)
+### Day 2 — 2026-11-21 (Saturday) — Phase 4: Approval Workflow (Part 1)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit tests (regression) | `npm test` | QA | 98+/98+ pass (baseline 98 at `22d66b6`) |
@@ -58,7 +60,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 3 — 2026-11-22 (Saturday) — Phase 4: Approval Workflow (Part 2)
+### Day 3 — 2026-11-22 (Sunday) — Phase 4: Approval Workflow (Part 2)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit regression | `npm test` | QA | All pass |
@@ -73,7 +75,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 4 — 2026-11-23 (Sunday) — Phase 5: Task Management (Part 1)
+### Day 4 — 2026-11-23 (Monday) — Phase 5: Task Management (Part 1)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit regression | `npm test` | QA | All pass |
@@ -86,7 +88,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 5 — 2026-11-24 (Monday) — Phase 5: Task Management (Part 2)
+### Day 5 — 2026-11-24 (Tuesday) — Phase 5: Task Management (Part 2)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit regression | `npm test` | QA | All pass |
@@ -103,7 +105,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 6 — 2026-11-25 (Tuesday) — Phase 6: Security & Reliability (Part 1)
+### Day 6 — 2026-11-25 (Wednesday) — Phase 6: Security & Reliability (Part 1)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit regression | `npm test` | QA | All pass |
@@ -116,7 +118,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 7 — 2026-11-26 (Wednesday) — Phase 6: Security & Reliability (Part 2)
+### Day 7 — 2026-11-26 (Thursday) — Phase 6: Security & Reliability (Part 2)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Unit regression | `npm test` | QA | All pass |
@@ -133,7 +135,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 8 — 2026-11-27 (Thursday) — Phase 7: Deployment Rehearsal (Part 1)
+### Day 8 — 2026-11-27 (Friday) — Phase 7: Deployment Rehearsal (Part 1)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Staging setup | `./scripts/setup-staging.sh` | DevOps | Fresh VM, DB seeded, Hermes tunnel |
@@ -145,7 +147,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 9 — 2026-11-28 (Friday) — Phase 7: Deployment Rehearsal (Part 2)
+### Day 9 — 2026-11-28 (Saturday) — Phase 7: Deployment Rehearsal (Part 2)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Full E2E suite (staging) | `npx playwright test --project=staging` | QA | 100% pass, screenshots |
@@ -160,7 +162,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ---
 
-### Day 10 — 2026-12-01 (Monday) — Final Release
+### Day 10 — 2026-12-01 (Tuesday) — Final Release
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
 | 09:00 | Full regression (unit) | `npm test` | QA | 100% pass on RC commit |
@@ -357,7 +359,7 @@ HERMES_URL=https://hermes-staging.bangron.my.id npx playwright test tests/e2e/he
 
 ---
 
-**Document Version:** 1.2
+**Document Version:** 1.3
 **Owner:** Main Agent (PM/QA Coordinator)
 **Review:** Daily at 17:00 WIB
 **Next Update:** Day 2 (2026-11-21) — Phase 4 start requires Director approval of PR #1 merge
