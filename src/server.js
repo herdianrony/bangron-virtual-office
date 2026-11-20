@@ -5,7 +5,12 @@ import { getDatabase, closeDatabase } from './database/connection.js';
 import { runMigrations } from './database/migrations/runner.js';
 import { createWebSocketServer } from './realtime/websocket-server.js';
 import { demoEngine } from './modules/demo/demo-engine.js';
+import { HermesAdapter } from './integrations/hermes/adapter.js';
+import { AgentRepository } from './database/repositories/agent.repository.js';
+import { eventPublisher } from './realtime/event-publisher.js';
 import logger from './utils/logger.js';
+
+const RUNTIME_CHECK_INTERVAL_MS = 30000;
 
 async function startServer() {
   try {
@@ -24,10 +29,50 @@ async function startServer() {
       );
 
       // Start the DEMO auto-play director unless explicitly disabled.
-      // Agents then walk through the office according to their active tasks.
       if (process.env.DEMO_AUTOPLAY !== 'false') {
         demoEngine.start();
       }
+
+      // PHASE 3: Runtime health watchdog.
+      // Tracks Hermes runtime availability SEPARATELY from agent lifecycle
+      // state (queued / working / thinking / collaborating / waiting /
+      // completed / failed / cancelled / idle). The watchdog NEVER overwrites
+      // persisted agent lifecycle statuses with runtime availability.
+      // When Hermes is unreachable, agents keep their lifecycle status in the
+      // database; the frontend derives "Offline" avatar appearance from
+      // runtimeStatus.connected = false while preserving the actual lifecycle
+      // state. When Hermes returns, agents resume normally — no state churn.
+      const hermesAdapter = new HermesAdapter();
+      let runtimeConnected = null; // null = unknown, true/false = last known
+      let healthCheckInFlight = false; // prevent overlapping requests
+
+      setInterval(async () => {
+        if (healthCheckInFlight) return;
+        healthCheckInFlight = true;
+        try {
+          const runtime = await hermesAdapter.getRuntimeStatus();
+          const connected = !!runtime.connected;
+
+          if (runtimeConnected === null) {
+            // First tick: just record, don't churn state.
+            runtimeConnected = connected;
+          } else if (connected !== runtimeConnected) {
+            // State changed: publish runtime availability change only.
+            // Agent lifecycle statuses are NOT modified — they remain the
+            // source of truth and are reconciled by Hermes events.
+            runtimeConnected = connected;
+            eventPublisher.publish('runtime.status.changed', {
+              connected,
+              reason: connected ? 'runtime_recovered' : 'runtime_unavailable',
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (err) {
+          logger.debug({ err }, 'Runtime health check tick skipped');
+        } finally {
+          healthCheckInFlight = false;
+        }
+      }, RUNTIME_CHECK_INTERVAL_MS).unref();
     });
 
     // Graceful shutdown

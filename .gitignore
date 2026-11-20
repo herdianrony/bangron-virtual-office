@@ -13,3 +13,8 @@ storage/temp/*
 .DS_Store
 coverage/
 dist/
+# Playwright artifacts
+playwright-report/
+test-results/
+tests/e2e/screenshots/*.png
+npm-debug.log*

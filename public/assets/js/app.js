@@ -22,6 +22,11 @@ class App {
   }
 
   async init() {
+    // Debug/E2E observability hook: expose the reactive store so browser
+    // tests can assert authoritative frontend state (runtimeStatus, agents).
+    // Read-only by convention; the app never reads window.store.
+    window.store = store;
+
     // 0. Initialize DaisyUI Theme Switcher
     this.initThemeController();
 
@@ -82,15 +87,32 @@ class App {
       }
     });
 
-    // 5. Reactive status updates
+    // 5. Reactive status updates. The indicator distinguishes TWO independent
+    // channels: the office WebSocket gateway (wsConnected) and the Hermes
+    // runtime availability (runtimeStatus, fed by runtime.status.changed).
+    // When the runtime is explicitly reported disconnected, the UI shows
+    // "Runtime Offline" even though the WebSocket itself is still live.
+    const renderRuntimeIndicator = () => {
+      const dot = document.getElementById('runtime-dot');
+      const text = document.getElementById('runtime-text');
+      if (!dot || !text) return;
+      const { wsConnected, runtimeStatus } = store.state;
+      const runtimeOffline =
+        runtimeStatus && runtimeStatus.connected === false && Boolean(runtimeStatus.reason);
+      if (!wsConnected) {
+        dot.className = 'status-dot offline';
+        text.innerText = 'Reconnecting...';
+      } else if (runtimeOffline) {
+        dot.className = 'status-dot offline';
+        text.innerText = 'Runtime Offline';
+      } else {
+        dot.className = 'status-dot online';
+        text.innerText = 'Live Realtime';
+      }
+    };
     store.subscribe((key) => {
-      if (key === 'state_updated') {
-        const dot = document.getElementById('runtime-dot');
-        const text = document.getElementById('runtime-text');
-        if (dot && text) {
-          dot.className = `status-dot ${store.state.wsConnected ? 'online' : 'offline'}`;
-          text.innerText = store.state.wsConnected ? 'Live Realtime' : 'Reconnecting...';
-        }
+      if (key === 'state_updated' || key === 'runtime_status_changed') {
+        renderRuntimeIndicator();
       }
     });
   }

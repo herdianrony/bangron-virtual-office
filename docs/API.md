@@ -123,9 +123,16 @@ Or on error:
 ## 8. Hermes Integration (`/api/integrations/hermes`)
 
 - `POST /api/integrations/hermes/events`
-  Webhook ingestion endpoint. Requires `X-Hermes-Signature` (HMAC-SHA256).
+  Webhook ingestion. HMAC-SHA256 over the exact raw body via
+  `X-Hermes-Signature-256: sha256=<hex>` (native Hermes), `x-hermes-signature`,
+  or `x-hub-signature-256`. Requires a stable `delivery_id`/`event_id` and a
+  timestamp inside the signed body (unix seconds/ms or ISO-8601, ±300s drift).
+  Duplicate deliveries of processed events → 409. See HERMES-INTEGRATION.md §5.2.
+- `POST /api/integrations/hermes/agents`
+  Idempotent agent registration (HMAC-protected, max 50 per call).
 - `GET /api/integrations/hermes/status`
   Health, verification status, and recent ingested events.
+  **Director-only** (authenticated session + director role; 401/403 otherwise).
 
 ---
 

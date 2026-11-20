@@ -243,7 +243,8 @@ export class PixiAgentLayer {
 
   _bubbleTextFor(agent) {
     let t = '';
-    if (agent.status === 'walking') t = agent.move_note || agent.moveNote || 'Walking...';
+    if (agent.status === 'offline') t = 'Offline';
+    else if (agent.status === 'walking') t = agent.move_note || agent.moveNote || 'Walking...';
     else if (agent.status === 'thinking') t = 'Thinking...';
     else if (agent.status === 'collaborating') t = 'Syncing...';
     else if (agent.status === 'waiting') t = 'Approval Req';

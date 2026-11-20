@@ -56,8 +56,9 @@ describe('Bangron Virtual Office API Integration Test Suite', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.metrics.totalAgents).toBeGreaterThanOrEqual(5);
-    expect(res.body.data.hermesHealth.connected).toBe(false);
-    expect(res.body.data.hermesHealth.status).toContain('RUNTIME_UNAVAILABLE');
+    // Hermes adapter now connects to real Hermes API server
+    expect(res.body.data.hermesHealth.connected).toBe(true);
+    expect(res.body.data.hermesHealth.status).toContain('CONNECTED');
   });
 
   it('fetches Virtual Office complete state snapshot', async () => {

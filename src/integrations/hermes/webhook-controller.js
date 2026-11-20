@@ -1,4 +1,4 @@
-import { validateHermesSignature } from './signature-validator.js';
+import { validateHermesSignature, validateHermesEvent } from './signature-validator.js';
 import { normalizeHermesEvent } from './event-normalizer.js';
 import { StateReconciler } from './state-reconciler.js';
 import { HermesAgentProvisioner } from './agent-provisioner.js';
@@ -16,8 +16,9 @@ export class HermesWebhookController {
   }
 
   handleWebhook = (req, res) => {
-    // 1. Signature Verification
-    const sigCheck = validateHermesSignature(req);
+    // 1. Signature + replay protection (stable ID + signed-body timestamp).
+    //    Freshness is bound to the HMAC-signed content, not an unsigned header.
+    const sigCheck = validateHermesEvent(req);
     if (!sigCheck.valid) {
       return sendError(res, sigCheck.reason, 'Webhook signature verification failed', [], 401);
     }
@@ -34,6 +35,11 @@ export class HermesWebhookController {
     // 3. Reconcile State
     try {
       const result = this.reconciler.reconcile(normalizedEvent);
+      // Replayed delivery of an already-processed event: reject explicitly.
+      // 409 is a 4xx, so Hermes outbound delivery treats it as final (no retry).
+      if (result.status === 'ignored') {
+        return sendError(res, 'DUPLICATE_EVENT', 'Event already processed; duplicate delivery rejected', [], 409);
+      }
       return sendSuccess(res, {
         event_id: normalizedEvent.event_id,
         event_type: normalizedEvent.event_type,

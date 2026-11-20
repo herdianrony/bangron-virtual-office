@@ -5,21 +5,25 @@ import { OFFICE_ROOMS, OFFICE_WORKSTATIONS } from '../../services/office-layout.
 export async function seedInitialOffice(db) {
   logger.info('Seeding initial office layout, director user, and core profiles...');
 
-  const passwordHash = await hashPassword('DirectorPass123!');
+  const directorEmail = process.env.INITIAL_DIRECTOR_EMAIL || 'director@bangron.office';
+  const directorName = process.env.INITIAL_DIRECTOR_NAME || 'Bangron';
+  const initialPassword = process.env.INITIAL_DIRECTOR_PASSWORD;
+  const existingDirector = db.prepare('SELECT id FROM users WHERE email = ?').get(directorEmail);
+  const passwordHash = !existingDirector && initialPassword ? await hashPassword(initialPassword) : null;
 
   const tx = db.transaction(() => {
     // 1. Initial Director User
-    const existingDirector = db.prepare('SELECT id FROM users WHERE email = ?').get('director@bangron.office');
-    if (!existingDirector) {
+    const currentDirector = db.prepare('SELECT id FROM users WHERE email = ?').get(directorEmail);
+    if (!currentDirector) {
+      if (!passwordHash || initialPassword.length < 12) {
+        throw new Error('Set INITIAL_DIRECTOR_PASSWORD to a unique password of at least 12 characters before running the seed for the first time.');
+      }
       const now = new Date().toISOString();
       db.prepare(`
         INSERT INTO users (name, email, password_hash, role, is_active, created_at, updated_at)
-        VALUES ('Bangron', 'director@bangron.office', ?, 'director', 1, ?, ?)
-      `).run(passwordHash, now, now);
-      logger.info('Created Director user (director@bangron.office)');
-    } else {
-      // Ensure password hash matches
-      db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(passwordHash, 'director@bangron.office');
+        VALUES (?, ?, ?, 'director', 1, ?, ?)
+      `).run(directorName, directorEmail, passwordHash, now, now);
+      logger.info({ email: directorEmail }, 'Created initial Director user');
     }
 
     // 2. Office Rooms — architectural floor plan v2 (corridors + door metadata)

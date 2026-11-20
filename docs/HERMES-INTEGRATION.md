@@ -96,12 +96,63 @@ hooks:
 Secret disimpan di `~/.hermes/.env` pada mesin Hermes: `HERMES_OUTBOUND_WEBHOOK_SECRET=...`
 dan **harus sama** dengan `HERMES_WEBHOOK_SECRET` di office.
 
-### 5.2 Wire format resmi (didukung penuh oleh office)
+### 5.2 Wire format resmi (diverifikasi terhadap runtime terpasang)
 
-- Header: `X-Hermes-Event`, `X-Hermes-Delivery`, `X-Hermes-Signature-256: sha256=<hex>`
-- Body: `hook_event_name`, `profile`, `tool_name`, `tool_input`, `session_id`, `cwd`, `extra{...}`, `delivery_id`, `timestamp`
-- Dedupe memakai `delivery_id` (Hermes retry 1x untuk 5xx), timestamp anti-replay di dalam body
+**Sumber verifikasi (2026-11-20):** kode runtime Hermes terpasang v0.23.2
+(`agent/outbound_webhooks.py` + `agent/shell_hooks.py::_utc_now_iso`), bukan asumsi:
+
+- Header: `X-Hermes-Event`, `X-Hermes-Delivery` (= `delivery_id`),
+  `X-Hermes-Signature-256: sha256=<hex>` = HMAC-SHA256(secret, **raw body persis**),
+  `User-Agent: Hermes-Agent-Outbound-Webhook`. **Tidak ada header `X-Hermes-Timestamp` native.**
+- Body (semua field di dalam body yang ditandatangani HMAC): `hook_event_name`, `profile`,
+  `tool_name`, `tool_input`, `session_id`, `cwd`, `extra{...}`, `delivery_id`, `timestamp`.
+- `delivery_id` = UUID4 hex, dibuat sekali per event dan **stabil lintas retry**
+  (Hermes: maksimal 2 attempt, retry hanya untuk connection error/5xx; 4xx final).
+- `timestamp` = **ISO-8601 UTC dengan `Z`** (contoh `2026-11-20T05:30:00Z`,
+  dapat memuat fraksi detik). Karena berada di dalam body yang ditandatangani,
+  timestamp terikat secara kriptografis ke konten — inilah dasar anti-replay.
+- Dedupe memakai `delivery_id`; event yang sudah diproses ditolak **409 DUPLICATE_EVENT**
+  (4xx → Hermes tidak me-retry).
 - Event yang dinormalisasi: `on_session_start` → execution.started, `on_session_end`/`on_session_finalize` → execution.ended, `subagent_start` → subagent.spawned, `subagent_stop` → subagent.exited, `pre_llm_call` → execution.step, `pre_tool_call`/`post_tool_call` → tool.started/tool.completed
+
+**Aturan validasi `/events` (S2 remediation):**
+
+1. HMAC-SHA256 atas raw body persis, perbandingan constant-time; header signature
+   yang diterima: `X-Hermes-Signature-256` (native), `x-hermes-signature`, `x-hub-signature-256`.
+2. **ID stabil wajib**: `delivery_id` (native) atau `event_id` (kontrak Bangron).
+   Tanpa ID → tolak; tidak ada pembangkitan ID acak diam-diam untuk webhook masuk.
+3. **Freshness dari timestamp di dalam body bertanda tangan** (`timestamp`, fallback
+   `occurred_at`): unix seconds/ms atau ISO-8601 berzona. Drift maksimum ±300 detik.
+   Header legacy `X-Hermes-Timestamp` bila dikirim harus cocok dengan timestamp body
+   (toleransi 1 detik) — header saja tidak pernah menjadi dasar freshness.
+4. Timestamp invalid/kedaluwarsa/without-ID → 401 dengan kode alasan di bawah;
+   duplikat delivery → 409; event valid → 200 + rekonsiliasi transaksional.
+
+| Kode alasan (401 kecuali disebut) | Kondisi |
+|---|---|
+| `WEBHOOK_SECRET_NOT_CONFIGURED` | Secret office belum di-set (fail-closed) |
+| `MISSING_SIGNATURE` / `INVALID_SIGNATURE` | Header signature hilang / HMAC tidak cocok |
+| `RAW_BODY_UNAVAILABLE` | Raw body tidak tersedia untuk verifikasi |
+| `MISSING_STABLE_EVENT_ID` | Tanpa `delivery_id`/`event_id` |
+| `MISSING_SIGNED_TIMESTAMP` | Body tanpa `timestamp`/`occurred_at` |
+| `INVALID_TIMESTAMP` | Format timestamp tidak didukung / tanggal rollover |
+| `TIMESTAMP_DRIFT` | Di luar jendela ±300 detik |
+| `TIMESTAMP_HEADER_MISMATCH` | Header legacy berbeda dari timestamp body bertanda tangan |
+| `DUPLICATE_EVENT` (409) | Delivery ulang event yang sudah diproses |
+
+Kompatibilitas mundur: kontrak Bangron lama (`event_id` + `event_type` + unix
+timestamp di body + header `X-Hermes-Timestamp` yang cocok) tetap diterima.
+Tes: `tests/unit/hermes-webhook-security.test.js` (kasus positif native + 7 kasus
+negatif) dan `tests/unit/event-timestamp.test.js`.
+
+**Batas adapter `/agents`:** registrasi agen hanya diverifikasi HMAC (tanpa
+timestamp/ID event) karena idempoten berdasarkan nama — replay tidak menghasilkan
+duplikasi. `/events` adalah satu-satunya jalur ingesti event lifecycle.
+
+**Status endpoint:** `GET /api/integrations/hermes/status` kini **Director-only**
+(`authenticate` + `requireDirector`, S1 remediation) — metadata runtime dan payload
+event terakhir tidak boleh dibaca klien anonim. UI Settings memanggilnya dengan
+sesi Director yang sudah login.
 
 ### 5.3 Resolusi identitas agen
 

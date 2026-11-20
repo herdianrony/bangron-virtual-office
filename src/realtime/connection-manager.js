@@ -6,6 +6,7 @@ export class ConnectionManager {
   }
 
   addClient(ws, meta = {}) {
+    if (!meta.userId) throw new Error('Authenticated userId is required for WebSocket clients');
     this.clients.set(ws, {
       userId: meta.userId || null,
       userName: meta.userName || 'Anonymous',
@@ -35,8 +36,8 @@ export class ConnectionManager {
 
   broadcast(messageObj) {
     const payload = typeof messageObj === 'string' ? messageObj : JSON.stringify(messageObj);
-    for (const [ws] of this.clients.entries()) {
-      if (ws.readyState === 1) { // WebSocket.OPEN
+    for (const [ws, meta] of this.clients.entries()) {
+      if (meta.userId && ws.readyState === 1) { // WebSocket.OPEN
         try {
           ws.send(payload);
         } catch (err) {

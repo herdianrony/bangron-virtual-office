@@ -43,7 +43,7 @@ export class TaskRepository {
       }
     }
 
-    query += ' ORDER BY CASE t.priority WHEN "critical" THEN 1 WHEN "high" THEN 2 WHEN "normal" THEN 3 ELSE 4 END, t.created_at DESC';
+    query += " ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, t.created_at DESC";
 
     return this.db.prepare(query).all(...params);
   }
@@ -79,7 +79,7 @@ export class TaskRepository {
     `).all(taskId);
   }
 
-  createTask({ id, projectId = null, parentTaskId = null, title, description = '', priority = 'normal', assignedAgentId = null, createdBy = 'director', requiresApproval = 0 }) {
+  createTask({ id, projectId = null, parentTaskId = null, title, description = '', priority = 'normal', assignedAgentId = null, createdBy = 'director', requiresApproval = 0, hermesRunId = null }) {
     const taskId = id || generateId('task');
     const now = new Date().toISOString();
 
@@ -87,8 +87,8 @@ export class TaskRepository {
       INSERT INTO agent_tasks (
         id, project_id, parent_task_id, title, description,
         status, priority, assigned_agent_id, created_by,
-        requires_approval, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+        requires_approval, hermes_run_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
     `).run(
       taskId,
       projectId,
@@ -99,6 +99,7 @@ export class TaskRepository {
       assignedAgentId,
       createdBy,
       requiresApproval ? 1 : 0,
+      hermesRunId,
       now,
       now
     );
@@ -141,6 +142,14 @@ export class TaskRepository {
     this.db.prepare(`
       UPDATE agent_tasks SET assigned_agent_id = ?, status = 'assigned', updated_at = ? WHERE id = ?
     `).run(agentInstanceId, now, taskId);
+    return this.getTaskById(taskId);
+  }
+
+  setHermesRunId(taskId, hermesRunId) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE agent_tasks SET hermes_run_id = ?, updated_at = ? WHERE id = ?
+    `).run(hermesRunId, now, taskId);
     return this.getTaskById(taskId);
   }
 

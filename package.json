@@ -1,7 +1,7 @@
 {
   "name": "bangron-virtual-office",
   "version": "1.0.0",
-  "description": "Bangron Virtual Office - An AI-powered digital studio with 2.5D Isometric Virtual Office",
+  "description": "Bangron Virtual Office - An AI-powered digital studio with a realistic 2D top-down virtual office",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
@@ -21,8 +21,9 @@
     "ai-agents",
     "hermes-agent",
     "multi-agent",
-    "isometric",
-    "svg"
+    "svg",
+    "top-down",
+    "pixi.js"
   ],
   "author": "Bangron",
   "license": "UNLICENSED",
@@ -43,9 +44,11 @@
   },
   "devDependencies": {
     "@flaticon/flaticon-uicons": "^3.3.1",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/cli": "^4.3.5",
     "@tailwindcss/typography": "^0.5.20",
     "daisyui": "^5.8.1",
+    "playwright": "^1.65.1",
     "supertest": "^7.1.4",
     "tailwindcss": "^4.3.5",
     "vitest": "^4.1.0"

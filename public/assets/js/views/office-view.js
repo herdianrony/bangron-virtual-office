@@ -187,6 +187,17 @@ export class OfficeView {
       if (eventKey === 'agents_loaded' || eventKey === 'agent_updated') {
         movementEngine.syncAgents(store.getAllAgents());
       }
+      if (eventKey === 'runtime_status_changed' || eventKey === 'state_updated') {
+        // Runtime availability is a VISUAL overlay only: when the Hermes
+        // runtime is explicitly disconnected, avatars render with the
+        // 'offline' halo while their lifecycle status stays untouched in
+        // the store and the database.
+        const container = this.container.querySelector('.office-container');
+        container?.classList.toggle('runtime-offline', this.isRuntimeOffline());
+        if (eventKey === 'runtime_status_changed') {
+          movementEngine.syncAgents(store.getAllAgents());
+        }
+      }
       if (eventKey === 'activity_added' && payload) {
         const ticker = document.getElementById('live-ticker-text');
         if (ticker) {
@@ -444,9 +455,24 @@ export class OfficeView {
     btn.title = enabled ? 'Pause automatic task-driven walks' : 'Resume automatic task-driven walks';
   }
 
+  /**
+   * True only when an explicit runtime.status.changed event reported the
+   * Hermes runtime disconnected. The initial store default (connected:false
+   * with no reason) and plain WebSocket reconnects do NOT gray out agents.
+   */
+  isRuntimeOffline() {
+    const rs = store.state.runtimeStatus;
+    return Boolean(rs && rs.connected === false && rs.reason);
+  }
+
   renderAvatars(agents, opts = {}) {
-    // Agents render on the PixiJS WebGL layer (diffed transforms, no DOM churn)
-    pixiAgentLayer.updateAgents(agents);
+    // Agents render on the PixiJS WebGL layer (diffed transforms, no DOM churn).
+    // Offline is a render-time overlay: lifecycle status in the store/DB is
+    // never modified by runtime availability.
+    const rendered = this.isRuntimeOffline()
+      ? agents.map((a) => ({ ...a, status: 'offline' }))
+      : agents;
+    pixiAgentLayer.updateAgents(rendered);
   }
 
   initTooltip() {

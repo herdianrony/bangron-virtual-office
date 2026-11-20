@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import { AuthService } from './auth.service.js';
+import { securityConfig } from '../../config/index.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { z } from 'zod';
 
@@ -41,9 +43,21 @@ export class AuthController {
 
         req.session.userId = user.id;
         req.session.userRole = user.role;
-        req.session.csrfToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        req.session.csrfToken = crypto.randomBytes(24).toString('hex');
 
-        return sendSuccess(res, { user, csrfToken: req.session.csrfToken }, 'Login successful');
+        // Persist the session BEFORE responding. express-session owns cookie
+        // creation and signing: session.save() writes the SQLite store and
+        // emits the signed `bvo_session` cookie (s:<sid>.<hmac>) with the
+        // security flags configured in app.js (httpOnly, sameSite=lax,
+        // secure in production). NEVER set a second manual cookie here — an
+        // unsigned duplicate overrides the signed one and breaks session
+        // recognition in both cookieParser and the WebSocket auth handshake.
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            return sendError(res, 'SESSION_ERROR', 'Failed to save session', [], 500);
+          }
+          return sendSuccess(res, { user, csrfToken: req.session.csrfToken }, 'Login successful');
+        });
       });
     } catch (err) {
       return sendError(res, 'AUTH_FAILED', err.message, [], 401);
@@ -56,7 +70,7 @@ export class AuthController {
         if (err) {
           return sendError(res, 'LOGOUT_ERROR', 'Failed to logout cleanly', [], 500);
         }
-        res.clearCookie('bvo_session');
+        res.clearCookie(securityConfig.sessionCookieName, { path: '/' });
         return sendSuccess(res, null, 'Logged out successfully');
       });
     } else {

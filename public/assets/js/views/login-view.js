@@ -30,7 +30,7 @@ export class LoginView {
                   <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-base-content/40">
                     <i class="fi fi-rr-user text-xs"></i>
                   </span>
-                  <input type="text" id="login-username" value="director@bangron.office" required class="input input-bordered input-sm w-full pl-8 bg-base-100 border-base-content/20 text-base-content" />
+                  <input type="text" id="login-username" placeholder="director@example.com" autocomplete="username" required class="input input-bordered input-sm w-full pl-8 bg-base-100 border-base-content/20 text-base-content" />
                 </div>
               </div>
 
@@ -40,7 +40,7 @@ export class LoginView {
                   <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-base-content/40">
                     <i class="fi fi-rr-lock text-xs"></i>
                   </span>
-                  <input type="password" id="login-password" value="DirectorPass123!" required class="input input-bordered input-sm w-full pl-8 bg-base-100 border-base-content/20 text-base-content" />
+                  <input type="password" id="login-password" placeholder="••••••••••••" autocomplete="current-password" required class="input input-bordered input-sm w-full pl-8 bg-base-100 border-base-content/20 text-base-content" />
                 </div>
               </div>
 
@@ -55,10 +55,9 @@ export class LoginView {
             <div class="text-[11px] text-base-content/70 bg-base-300/60 p-3.5 rounded-lg border border-base-content/10 space-y-1.5">
               <div class="font-bold text-base-content flex items-center gap-1.5">
                 <i class="fi fi-rr-info text-info text-xs"></i>
-                Default Director Credentials:
+                Access Notice:
               </div>
-              <div>Identifier: <code class="text-primary font-mono font-bold">director@bangron.office</code> (or <code class="text-primary font-mono font-bold">bangron</code>)</div>
-              <div>Password: <code class="text-primary font-mono font-bold">DirectorPass123!</code></div>
+              <div>Credentials are provisioned by the studio administrator. Contact the Director if you need access.</div>
             </div>
           </div>
         </div>

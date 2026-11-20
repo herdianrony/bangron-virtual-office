@@ -3,12 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import logger from '../../utils/logger.js';
 import * as initialSchema from './001_initial_schema.js';
+import * as addHermesRunId from './002_add_hermes_run_id.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const migrations = [
-  initialSchema
+  initialSchema,
+  addHermesRunId
 ];
 
 export function runMigrations(db) {

@@ -17,7 +17,10 @@ export class RealtimeClient {
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0;
-        store.setState({ wsConnected: true });
+        store.setState({
+          wsConnected: true,
+          runtimeStatus: { connected: true, text: 'Connected', reason: 'websocket_connected', timestamp: new Date().toISOString() }
+        });
         console.log('[Realtime] WebSocket connected to Bangron Virtual Office Gateway.');
       };
 
@@ -123,6 +126,22 @@ export class RealtimeClient {
       case 'demo.reset':
         // Request fresh snapshot
         this.send({ type: 'request_snapshot' });
+        break;
+
+      case 'runtime.status.changed':
+        // Runtime availability changed (connect/disconnect). This is
+        // SEPARATE from agent lifecycle status — the frontend derives
+        // "Offline" avatar appearance from runtimeStatus while preserving
+        // the actual lifecycle state (queued/working/etc.).
+        store.setState({
+          runtimeStatus: {
+            connected: !!data.connected,
+            text: data.connected ? 'Connected' : 'Disconnected',
+            reason: data.reason,
+            timestamp: data.timestamp
+          }
+        });
+        store.notify('runtime_status_changed', data);
         break;
     }
   }

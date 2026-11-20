@@ -9,7 +9,7 @@ export class CameraController {
     this.onTransformChange = null;
 
     this.panX = 0;
-    this.panY = 160; // Initial nice isometric tilt center
+    this.panY = 0; // Top-down camera starts with no vertical offset
     this.scale = 1.0;
     this.minScale = 0.4;
     this.maxScale = 2.4;
@@ -95,10 +95,11 @@ export class CameraController {
   }
 
   reset() {
-    this.panX = window.innerWidth / 2 - 100;
-    this.panY = 220;
-    this.scale = 1.0;
     store.setState({ followAgentId: null });
+    const bounds = this.svg.getBoundingClientRect();
+    this.panX = bounds.width / 2;
+    this.panY = bounds.height / 2;
+    this.scale = 1.0;
     this.updateTransform();
   }
 

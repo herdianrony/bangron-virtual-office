@@ -26,6 +26,7 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
 import demoRoutes from './modules/demo/demo.routes.js';
 import hermesRoutes from './integrations/hermes/hermes.routes.js';
+import { createTestRoutes } from './modules/test/test.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,17 +39,26 @@ export function createApp(customDb = null) {
   // deployment produksi). Tanpa ini, express-rate-limit menolak request eksternal
   // yang membawa X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR -> HTTP 500).
   // '1' = percayai satu hop proxy pertama.
-  app.set('trust proxy', 1);
+  app.set('trust proxy', appConfig.isProduction ? Number(process.env.TRUST_PROXY_HOPS || 1) : false);
   const db = customDb || getDatabase();
   const sessionStore = new SQLiteSessionStore(db);
 
-  // Live preview compatibility: Disable frameguard so preview iframe can render smoothly
-  app.use(
-    helmet({
-      frameguard: false,
-      contentSecurityPolicy: false // Allows self-contained SVGs, live WebSockets & iframe rendering
-    })
-  );
+  // Keep local preview flexible, but enforce browser security headers in production.
+  app.use(helmet({
+    frameguard: { action: 'sameorigin' },
+    contentSecurityPolicy: appConfig.isProduction ? {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'", 'ws:', 'wss:']
+      }
+    } : false
+  }));
 
   // Raw body capture for HMAC webhook signature verification
   app.use(
@@ -73,7 +83,7 @@ export function createApp(customDb = null) {
       store: sessionStore,
       cookie: {
         httpOnly: true,
-        secure: false, // Set false for local HTTP dev and proxy compatibility
+        secure: appConfig.isProduction, // Requires HTTPS in production
         sameSite: 'lax',
         maxAge: securityConfig.sessionMaxAgeMs
       }
@@ -106,6 +116,13 @@ export function createApp(customDb = null) {
   app.use('/api/audit', auditRoutes);
   app.use('/api/demo', demoRoutes);
   app.use('/api/integrations/hermes', hermesRoutes);
+
+  // Test-only routes: require the EXPLICIT ENABLE_TEST_ROUTES=true opt-in and
+  // a non-production environment (see config/app.js). Disabled by default;
+  // never mounted in production even if the flag leaks into the environment.
+  if (appConfig.testRoutesEnabled) {
+    app.use('/api', createTestRoutes());
+  }
 
   // Single Page App routing fallback for UI routes
   const appRoutes = [
