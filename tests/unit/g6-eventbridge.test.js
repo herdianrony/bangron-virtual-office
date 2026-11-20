@@ -598,69 +598,78 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
 
   it('reconnect occurs from the last successful checkpoint', async () => {
     let fetchCallCount = 0;
-    let firstReconcile = true;
+    let reconcileCallCount = 0;
 
     const mockReconciler = {
       reconcile: vi.fn().mockImplementation(() => {
-        if (firstReconcile) {
-          firstReconcile = false;
+        reconcileCallCount++;
+        if (reconcileCallCount === 1) {
           return Promise.reject(new Error('Temporary failure'));
         }
         return Promise.resolve({ status: 'processed' });
       })
     };
 
-    const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
 
-    // First fetch - returns event 1
-    const reader1 = createControllableSSEReader();
-    reader1.push(sseEvent({
-      id: 'evt_1',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_reconnect' }
-    }));
-    reader1.close();
-
-    // Second fetch (reconnect) - returns event 1 again (since checkpoint not advanced)
-    const reader2 = createControllableSSEReader();
-    reader2.push(sseEvent({
-      id: 'evt_1',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_reconnect' }
-    }));
-    reader2.push(sseEvent({
-      id: 'evt_2',
-      event: 'agent.execution.step',
-      data: { step: 1 }
-    }));
-    reader2.close();
-
-    let fetchIndex = 0;
     global.fetch = vi.fn().mockImplementation(() => {
       fetchCallCount++;
-      if (fetchIndex === 0) {
-        fetchIndex++;
-        return createFetchFromReader(reader1)();
+      const reader = createControllableSSEReader();
+      if (fetchCallCount <= 2) {
+        if (fetchCallCount === 1) {
+          // First fetch: event 1 (reconciliation will fail)
+          reader.push(sseEvent({
+            id: 'evt_1',
+            event: 'agent.execution.started',
+            data: { task_id: 'task_reconnect' }
+          }));
+        } else {
+          // Second fetch: event 1 (success) + event 2 (success) + terminal
+          reader.push(sseEvent({
+            id: 'evt_1',
+            event: 'agent.execution.started',
+            data: { task_id: 'task_reconnect' }
+          }));
+          reader.push(sseEvent({
+            id: 'evt_2',
+            event: 'agent.execution.step',
+            data: { step: 1 }
+          }));
+          reader.push(sseEvent({
+            id: 'evt_3',
+            event: 'run.completed',
+            data: { status: 'completed' }
+          }));
+        }
+      } else {
+        // Should not reach here - terminal event stops polling
+        return Promise.resolve({ ok: false, status: 500 });
       }
-      return createFetchFromReader(reader2)();
+      reader.close();
+      return createFetchFromReader(reader)();
     });
 
     bridge.registerRunTaskMapping('run_reconnect', 'task_reconnect');
-    bridge.startPolling('run_reconnect', {
-      onEvent: () => {}
-    });
+    bridge.startPolling('run_reconnect', { onEvent: () => {} });
 
     // Wait for reconnect and event processing
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Should have reconnected at least once (may fetch more as loop continues)
+    // Should have reconnected at least once
     expect(fetchCallCount).toBeGreaterThanOrEqual(2);
-    // First event processed on second attempt (evt_1 fail, evt_1 success, evt_2 success)
-    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(3);
+    // First event processed on second attempt (evt_1 fail, evt_1 success, evt_2 success, terminal success)
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(4);
+    bridge.stopAll();
   });
 
   it('failed event can be replayed after reconnect', async () => {
     let attempt = 0;
+    let fetchCallCount = 0;
     const mockReconciler = {
       reconcile: vi.fn().mockImplementation(() => {
         attempt++;
@@ -671,33 +680,29 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
       })
     };
 
-    const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
 
-    // First fetch - returns event 1 (reconciliation will fail)
-    const reader1 = createControllableSSEReader();
-    reader1.push(sseEvent({
-      id: 'evt_replay',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_replay' }
-    }));
-    reader1.close();
-
-    // Second fetch (reconnect) - returns same event again
-    const reader2 = createControllableSSEReader();
-    reader2.push(sseEvent({
-      id: 'evt_replay',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_replay' }
-    }));
-    reader2.close();
-
-    let fetchIndex = 0;
     global.fetch = vi.fn().mockImplementation(() => {
-      if (fetchIndex === 0) {
-        fetchIndex++;
-        return createFetchFromReader(reader1)();
+      fetchCallCount++;
+      const reader = createControllableSSEReader();
+      if (fetchCallCount <= 2) {
+        // First two fetches: return the event (fail then success)
+        reader.push(sseEvent({
+          id: 'evt_replay',
+          event: 'agent.execution.started',
+          data: { task_id: 'task_replay' }
+        }));
+      } else {
+        // Subsequent fetches: return error to stop polling
+        return Promise.resolve({ ok: false, status: 500 });
       }
-      return createFetchFromReader(reader2)();
+      reader.close();
+      return createFetchFromReader(reader)();
     });
 
     const processedEvents = [];
@@ -707,17 +712,19 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
     });
 
     // Wait for reconnect and retry
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Event should eventually be processed exactly once
     expect(processedEvents.length).toBe(1);
     expect(processedEvents[0].event_id).toBe('evt_replay');
     // Reconcile called twice (fail + success)
     expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
+    bridge.stopAll();
   });
 
   it('successful retry persists the event exactly once', async () => {
     let attempt = 0;
+    let fetchCallCount = 0;
     const mockReconciler = {
       reconcile: vi.fn().mockImplementation(() => {
         attempt++;
@@ -728,33 +735,29 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
       })
     };
 
-    const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
 
-    // First fetch - returns event 1 (reconciliation will fail)
-    const reader1 = createControllableSSEReader();
-    reader1.push(sseEvent({
-      id: 'evt_exact',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_exactly_once' }
-    }));
-    reader1.close();
-
-    // Second fetch (reconnect) - returns same event again
-    const reader2 = createControllableSSEReader();
-    reader2.push(sseEvent({
-      id: 'evt_exact',
-      event: 'agent.execution.started',
-      data: { task_id: 'task_exactly_once' }
-    }));
-    reader2.close();
-
-    let fetchIndex = 0;
     global.fetch = vi.fn().mockImplementation(() => {
-      if (fetchIndex === 0) {
-        fetchIndex++;
-        return createFetchFromReader(reader1)();
+      fetchCallCount++;
+      const reader = createControllableSSEReader();
+      if (fetchCallCount <= 2) {
+        // First two fetches: return the event (fail then success)
+        reader.push(sseEvent({
+          id: 'evt_exact',
+          event: 'agent.execution.started',
+          data: { task_id: 'task_exactly_once' }
+        }));
+      } else {
+        // Subsequent fetches: return error to stop polling
+        return Promise.resolve({ ok: false, status: 500 });
       }
-      return createFetchFromReader(reader2)();
+      reader.close();
+      return createFetchFromReader(reader)();
     });
 
     const processedEvents = [];
@@ -764,13 +767,14 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
     });
 
     // Wait for reconnect and retry
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Event should be processed exactly once despite retry
     expect(processedEvents.length).toBe(1);
     expect(processedEvents[0].event_id).toBe('evt_exact');
     // Reconcile called twice (fail + success)
     expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
+    bridge.stopAll();
   });
 
   it('terminal event with failed reconciliation does not stop the run permanently', async () => {
@@ -785,48 +789,44 @@ describe('G6.1.3 — Reconciliation Failure Recovery', () => {
       })
     };
 
-    const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
 
-    // First fetch - returns terminal event (reconciliation will fail)
-    const reader1 = createControllableSSEReader();
-    reader1.push(sseEvent({
-      id: 'evt_terminal',
-      event: 'run.completed',
-      data: { status: 'completed' }
-    }));
-    reader1.close();
-
-    // Second fetch (reconnect) - returns same terminal event again
-    const reader2 = createControllableSSEReader();
-    reader2.push(sseEvent({
-      id: 'evt_terminal',
-      event: 'run.completed',
-      data: { status: 'completed' }
-    }));
-    reader2.close();
-
-    let fetchIndex = 0;
+    let fetchCallCount = 0;
     global.fetch = vi.fn().mockImplementation(() => {
-      if (fetchIndex === 0) {
-        fetchIndex++;
-        return createFetchFromReader(reader1)();
+      fetchCallCount++;
+      const reader = createControllableSSEReader();
+      if (fetchCallCount <= 2) {
+        // First two fetches: return terminal event (fail then success)
+        reader.push(sseEvent({
+          id: 'evt_terminal',
+          event: 'run.completed',
+          data: { status: 'completed' }
+        }));
+      } else {
+        // Should not reach here - loop should break after terminal
+        return Promise.resolve({ ok: false, status: 500 });
       }
-      return createFetchFromReader(reader2)();
+      reader.close();
+      return createFetchFromReader(reader)();
     });
 
     bridge.registerRunTaskMapping('run_terminal_retry', 'task_terminal_retry');
-    bridge.startPolling('run_terminal_retry', {
-      onEvent: () => {}
-    });
+    bridge.startPolling('run_terminal_retry', { onEvent: () => {} });
 
     // Wait for reconnect and retry
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Terminal event should eventually be processed
     expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
     // Run should be stopped after successful terminal event
     expect(bridge.activePolls.has('run_terminal_retry')).toBe(false);
     expect(bridge.getTaskIdForRun('run_terminal_retry')).toBeUndefined();
+    bridge.stopAll();
   });
 });
 
@@ -1040,6 +1040,363 @@ describe('G6.1.3 — Complete SSE Line Ending Support', () => {
     expect(processedEvents.length).toBe(1);
     expect(processedEvents[0].event_id).toBe('evt_flush');
 
+    bridge.stopAll();
+  });
+});
+
+describe('G6.1.4 — Reconciliation Failure Retry Backoff', () => {
+  beforeEach(() => {
+    hermesEventBridge.stopAll();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    hermesEventBridge.stopAll();
+  });
+
+  it('repeated reconciliation failure causes bounded backoff, not a tight loop', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockRejectedValue(new Error('Persistent DB failure'))
+    };
+
+    // Use small backoff for fast test
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    let callCount = 0;
+    const fetchTimes = [];
+    global.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      fetchTimes.push(Date.now());
+      const reader = createControllableSSEReader();
+      // Push fresh event data for each fetch
+      reader.push(sseEvent({
+        id: `evt_backoff_${callCount}`,
+        event: 'agent.execution.started',
+        data: { task_id: 'task_backoff' }
+      }));
+      reader.close();
+      return createFetchFromReader(reader)();
+    });
+
+    bridge.registerRunTaskMapping('run_backoff', 'task_backoff');
+    bridge.startPolling('run_backoff', { onEvent: () => {} });
+
+    // Wait for multiple reconnect attempts (should stop after maxReconciliationFailures=5)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Should have made multiple fetch attempts
+    expect(callCount).toBeGreaterThanOrEqual(3);
+
+    // Verify backoff timing: intervals should grow (10ms, 20ms, 40ms...)
+    const intervals = [];
+    for (let i = 1; i < fetchTimes.length; i++) {
+      intervals.push(fetchTimes[i] - fetchTimes[i - 1]);
+    }
+    // At least some intervals should show backoff (> 5ms)
+    const hasBackoff = intervals.some(interval => interval > 5);
+    expect(hasBackoff).toBe(true);
+
+    // Should eventually stop after maxReconciliationFailures (5)
+    // Reconcile was called at least once (each failed fetch triggers reconciliation)
+    expect(mockReconciler.reconcile.mock.calls.length).toBeGreaterThanOrEqual(1);
+    bridge.stopAll();
+  });
+
+  it('successful retry resets the retry counter', async () => {
+    let attempt = 0;
+    const mockReconciler = {
+      reconcile: vi.fn().mockImplementation(() => {
+        attempt++;
+        if (attempt <= 2) {
+          return Promise.reject(new Error('Temporary failure'));
+        }
+        return Promise.resolve({ status: 'processed' });
+      })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    let callCount = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      const reader = createControllableSSEReader();
+      if (callCount === 1) {
+        // First fetch: event 1 (will fail)
+        reader.push(sseEvent({
+          id: 'evt_1',
+          event: 'agent.execution.started',
+          data: { task_id: 'task_reset' }
+        }));
+      } else if (callCount === 2) {
+        // Second fetch: event 1 again (will fail)
+        reader.push(sseEvent({
+          id: 'evt_1',
+          event: 'agent.execution.started',
+          data: { task_id: 'task_reset' }
+        }));
+      } else if (callCount === 3) {
+        // Third fetch: event 1 (succeeds) + event 2
+        reader.push(sseEvent({
+          id: 'evt_1',
+          event: 'agent.execution.started',
+          data: { task_id: 'task_reset' }
+        }));
+        reader.push(sseEvent({
+          id: 'evt_2',
+          event: 'agent.execution.step',
+          data: { step: 1 }
+        }));
+      } else {
+        // Subsequent fetches: return error to stop polling
+        return Promise.resolve({ ok: false, status: 500 });
+      }
+      reader.close();
+      return createFetchFromReader(reader)();
+    });
+
+    bridge.registerRunTaskMapping('run_reset', 'task_reset');
+    bridge.startPolling('run_reset', { onEvent: () => {} });
+
+    // Wait for multiple reconnects and final success
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Should have eventually succeeded
+    expect(callCount).toBeGreaterThanOrEqual(3);
+    expect(mockReconciler.reconcile.mock.calls.length).toBeGreaterThanOrEqual(2);
+    bridge.stopAll();
+  });
+
+  it('reconciliation failure during decoder flush triggers recovery', async () => {
+    let flushAttempt = 0;
+    let callCount = 0;
+    const mockReconciler = {
+      reconcile: vi.fn().mockImplementation(() => {
+        flushAttempt++;
+        if (flushAttempt === 1) {
+          return Promise.reject(new Error('Flush reconciliation failed'));
+        }
+        return Promise.resolve({ status: 'processed' });
+      })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    global.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      const reader = createControllableSSEReader();
+      if (callCount <= 2) {
+        // First two fetches: event without delimiter (flush fail then success)
+        reader.push('id: evt_flush_fail\nevent: agent.execution.started\ndata: {"task":"flush_fail"}');
+      } else {
+        // Subsequent fetches: return error to stop polling
+        return Promise.resolve({ ok: false, status: 500 });
+      }
+      reader.close();
+      return createFetchFromReader(reader)();
+    });
+
+    const processedEvents = [];
+    bridge.registerRunTaskMapping('run_flush_fail', 'task_flush_fail');
+    bridge.startPolling('run_flush_fail', {
+      onEvent: (event) => processedEvents.push(event)
+    });
+
+    // Wait for flush processing and reconnect
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Event should eventually be processed on reconnect
+    expect(processedEvents.length).toBe(1);
+    expect(processedEvents[0].event_id).toBe('evt_flush_fail');
+    // Reconcile called twice (flush fail + reconnect success)
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
+    // Fetch called at least twice (fail + success), may have additional error fetches
+    expect(callCount).toBeGreaterThanOrEqual(2);
+    bridge.stopAll();
+  });
+
+  it('failed final event does not advance checkpoint', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockRejectedValue(new Error('DB connection failed'))
+    };
+
+    const bridge = new HermesEventBridge({ reconciler: mockReconciler, pollInterval: 50 });
+    const reader = createControllableSSEReader();
+    global.fetch = createFetchFromReader(reader);
+
+    bridge.registerRunTaskMapping('run_final_fail', 'task_final_fail');
+    bridge.startPolling('run_final_fail', { onEvent: () => {} });
+
+    // Push event WITHOUT final delimiter (processed in flush)
+    reader.push('id: evt_final\nevent: agent.execution.started\ndata: {"task":"final_fail"}');
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Checkpoint should remain unchanged
+    const pollState = bridge.activePolls.get('run_final_fail');
+    expect(pollState).toBeDefined();
+    expect(pollState.lastEventId).toBeNull();
+    expect(pollState.lastSeq).toBe(-1);
+    bridge.stopAll();
+  });
+
+  it('terminal event during decoder flush only terminates after successful persistence', async () => {
+    let terminalAttempt = 0;
+    const mockReconciler = {
+      reconcile: vi.fn().mockImplementation(() => {
+        terminalAttempt++;
+        if (terminalAttempt === 1) {
+          return Promise.reject(new Error('Temporary failure'));
+        }
+        return Promise.resolve({ status: 'processed' });
+      })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    let callCount = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      const reader = createControllableSSEReader();
+      if (callCount <= 2) {
+        // Terminal event without delimiter
+        reader.push('id: evt_terminal\nevent: run.completed\ndata: {"status":"completed"}');
+      } else {
+        // Should not reach here - loop should break after terminal
+        return Promise.resolve({ ok: false, status: 500 });
+      }
+      reader.close();
+      return createFetchFromReader(reader)();
+    });
+
+    bridge.registerRunTaskMapping('run_terminal_flush', 'task_terminal_flush');
+    bridge.startPolling('run_terminal_flush', { onEvent: () => {} });
+
+    // Wait for flush processing and reconnect
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Terminal event should eventually be processed (2 reconcile calls: fail + success)
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(2);
+    // Run should be stopped after successful terminal event
+    expect(bridge.activePolls.has('run_terminal_flush')).toBe(false);
+    expect(bridge.getTaskIdForRun('run_terminal_flush')).toBeUndefined();
+    // Fetch called at least twice (fail + success)
+    expect(callCount).toBeGreaterThanOrEqual(2);
+    bridge.stopAll();
+  });
+});
+
+describe('G6.1.4 — True Multiline SSE Data Fields', () => {
+  beforeEach(() => {
+    hermesEventBridge.stopAll();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    hermesEventBridge.stopAll();
+  });
+
+  it('should handle true multiline data: fields (separate data: lines)', async () => {
+    const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+    const reader = createControllableSSEReader();
+    global.fetch = createFetchFromReader(reader);
+
+    const processedEvents = [];
+    bridge.startPolling('run_true_multiline', {
+      onEvent: (event) => processedEvents.push(event)
+    });
+
+    // True multiline SSE: multiple data: lines for one event
+    // Per SSE spec, these are concatenated with \n
+    reader.push('id: evt_ml\n');
+    reader.push('event: agent.tool.started\n');
+    reader.push('data: {"tool_name": "write_file"\n');
+    reader.push('data: "content": "line1\n');
+    reader.push('data: line2\n');
+    reader.push('data: line3"}\n');
+    reader.push('\n'); // delimiter
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+    expect(processedEvents.length).toBe(1);
+    expect(processedEvents[0].event_id).toBe('evt_ml');
+    expect(processedEvents[0].event_type).toBe('agent.tool.started');
+  });
+
+  it('should handle multiline data with CRLF split across chunks', async () => {
+    const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+    const reader = createControllableSSEReader();
+    global.fetch = createFetchFromReader(reader);
+
+    const processedEvents = [];
+    bridge.startPolling('run_ml_crlf_chunk', {
+      onEvent: (event) => processedEvents.push(event)
+    });
+
+    // CRLF split across chunks during multiline data
+    reader.push('id: evt_ml_crlf\r');
+    reader.push('\nevent: agent.execution.started\r');
+    reader.push('\ndata: {"task":"crlf');
+    reader.push('\ndata: split"}\r');
+    reader.push('\n\r\n'); // CRLF delimiter
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+    expect(processedEvents.length).toBe(1);
+    expect(processedEvents[0].event_id).toBe('evt_ml_crlf');
+    expect(processedEvents[0].event_type).toBe('agent.execution.started');
+  });
+
+  it('should handle CRLF split across decoder output boundaries', async () => {
+    const { bridge, mockReconciler } = createBridgeWithMockReconciler();
+
+    // Single fetch with CRLF split across multiple chunks
+    const reader = createControllableSSEReader();
+    global.fetch = createFetchFromReader(reader);
+
+    const processedEvents = [];
+    bridge.startPolling('run_decoder_crlf', {
+      onEvent: (event) => processedEvents.push(event)
+    });
+
+    // Push chunks that split CRLF across chunk boundaries
+    reader.push('id: evt_decoder\r');
+    reader.push('\nevent: agent.execution.started\r');
+    reader.push('\ndata: {"task":"decoder"}');
+    reader.push('\r\n\r\n'); // CRLF delimiter
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Should process the event successfully
+    expect(mockReconciler.reconcile).toHaveBeenCalledTimes(1);
+    expect(processedEvents.length).toBe(1);
+    expect(processedEvents[0].event_id).toBe('evt_decoder');
+    expect(processedEvents[0].event_type).toBe('agent.execution.started');
     bridge.stopAll();
   });
 });

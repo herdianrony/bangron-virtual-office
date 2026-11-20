@@ -28,6 +28,8 @@ export class HermesEventBridge {
     this.reconciler = config.reconciler || new StateReconciler();
     this.pollInterval = config.pollInterval || 5000;
     this.maxRetries = config.maxRetries || 3;
+    this.reconciliationBackoffBase = config.reconciliationBackoffBase || 1000;
+    this.reconciliationBackoffMax = config.reconciliationBackoffMax || 30000;
     this.activePolls = new Map(); // runId -> { controller, taskId, lastEventId, lastSeq, onEvent }
     this.running = false;
     this.runTaskMap = new Map(); // runId -> taskId mapping
@@ -116,7 +118,9 @@ export class HermesEventBridge {
    */
   async _pollRunEvents(runId, signal, pollState, options = {}) {
     let consecutiveErrors = 0;
+    let reconciliationFailures = 0;
     const maxConsecutiveErrors = 5;
+    const maxReconciliationFailures = 5;
 
     // Get taskId from mapping
     const taskId = this.runTaskMap.get(runId);
@@ -136,18 +140,32 @@ export class HermesEventBridge {
 
         if (result.terminated) {
           // Terminal event was processed and mapping cleaned up
+          reconciliationFailures = 0; // Reset on successful terminal
           break;
         }
 
         if (result.reconnectNeeded) {
-          // Reconciliation failure - reconnect from last successful checkpoint
-          logger.warn({ runId, lastEventId: pollState.lastEventId, lastSeq: pollState.lastSeq },
-            'Reconciliation failed, will reconnect from last checkpoint');
+          // Reconciliation failure - apply bounded exponential backoff
+          reconciliationFailures++;
+          logger.warn({ runId, lastEventId: pollState.lastEventId, lastSeq: pollState.lastSeq, reconciliationFailures },
+            'Reconciliation failed, will reconnect from last checkpoint with backoff');
+
+          if (reconciliationFailures >= maxReconciliationFailures) {
+            logger.error({ runId, reconciliationFailures }, 'Too many consecutive reconciliation failures, stopping poll');
+            break;
+          }
+
+          const backoffMs = Math.min(this.reconciliationBackoffBase * Math.pow(2, reconciliationFailures - 1), this.reconciliationBackoffMax);
+          logger.warn({ runId, retryIn: backoffMs, attempt: reconciliationFailures }, 'Reconciliation failure, retrying with backoff...');
+          await this._sleep(backoffMs);
           // Don't break - the while loop will reconnect
           continue;
         }
 
         // Stream ended without terminal event (finite batch).
+        // Successful stream cycle resets reconciliation failure counter.
+        reconciliationFailures = 0;
+
         // Wait before re-polling to check for new events.
         await this._sleep(this.pollInterval);
       } catch (err) {
@@ -305,7 +323,17 @@ export class HermesEventBridge {
             ) {
               const parsedEvent = this._parseSSEEvent(currentEvent);
               if (parsedEvent) {
-                await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+                const status = await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+                // Handle flush results properly - don't swallow them
+                if (status === 'terminal') {
+                  return { terminated: true, reconnectNeeded: false };
+                }
+                if (status === 'reconnect') {
+                  return { terminated: false, reconnectNeeded: true };
+                }
+                if (status === 'aborted') {
+                  return { terminated: false, reconnectNeeded: false };
+                }
               }
             }
             currentEvent = { dataLines: [] };
@@ -327,8 +355,10 @@ export class HermesEventBridge {
           }
         }
       } catch (e) {
-        // Ignore flush errors
+        // Ignore flush errors but log them
+        logger.debug({ err: e }, 'Decoder flush error');
       }
+      // Process any event that didn't end with a delimiter
       if (
         !signal.aborted &&
         (currentEvent.dataLines.length > 0 ||
@@ -337,7 +367,16 @@ export class HermesEventBridge {
       ) {
         const parsedEvent = this._parseSSEEvent(currentEvent);
         if (parsedEvent) {
-          await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+          const status = await this._processParsedEvent(parsedEvent, runId, signal, pollState);
+          if (status === 'terminal') {
+            return { terminated: true, reconnectNeeded: false };
+          }
+          if (status === 'reconnect') {
+            return { terminated: false, reconnectNeeded: true };
+          }
+          if (status === 'aborted') {
+            return { terminated: false, reconnectNeeded: false };
+          }
         }
       }
       try {
