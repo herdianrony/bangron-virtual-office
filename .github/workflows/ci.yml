@@ -66,6 +66,19 @@ jobs:
           cache: npm
       - name: Install dependencies (exact lockfile)
         run: npm ci
+      - name: TEMP DEBUG — env visibility (removed before merge)
+        run: |
+          node -e "const p=process.env.INITIAL_DIRECTOR_PASSWORD||''; console.log('step-level password length:', p.length, 'value:', JSON.stringify(p))"
+          node --input-type=module -e "
+            const { runMigrations } = await import('./src/database/migrations/runner.js');
+            const { seedInitialOffice } = await import('./src/database/seeds/initial_office.js');
+            const { default: Database } = await import('better-sqlite3');
+            console.log('module-level password:', JSON.stringify(process.env.INITIAL_DIRECTOR_PASSWORD));
+            const db = new Database(':memory:');
+            runMigrations(db);
+            try { await seedInitialOffice(db); console.log('direct seed OK'); } catch (e) { console.log('direct seed FAILED:', e.message); }
+            db.close();
+          "
       - name: Run unit suite (isolated in-memory SQLite)
         run: npm test
 
@@ -102,6 +115,8 @@ jobs:
         run: npm ci
       - name: Install Chromium + system dependencies
         run: npx playwright install --with-deps chromium
+      - name: TEMP DEBUG — env visibility (removed before merge)
+        run: node -e "const p=process.env.INITIAL_DIRECTOR_PASSWORD||''; console.log('e2e step-level password length:', p.length, 'value:', JSON.stringify(p))"
       - name: Run E2E suite (app server starts inside this runner)
         # playwright.config.js starts the app via webServer with the isolated
         # E2E env contract (port 3102, dedicated fresh SQLite DB, no real
