@@ -4,7 +4,7 @@
 **Repository:** https://github.com/herdianrony/bangron-virtual-office
 **Target Release:** v1.0.0
 **Acceptance Authority:** Human Director (herdianrony)
-**Checklist Version:** 1.0
+**Checklist Version:** 1.1
 **Last Updated:** 2026-11-20
 
 ---
@@ -16,49 +16,111 @@ Each gate requires: **implementation + tests passing + Director approval**.
 
 | Gate | Phase | Description | Status | Evidence Required |
 |------|-------|-------------|--------|-------------------|
-| G1 | 3.2 | Final stabilization & E2E verification | ⏳ | 48 unit + 13 E2E pass |
+| G1 | 3.2 | Final stabilization & E2E verification | ⏳ | 98 unit/integration + 10 E2E pass — verified (see Gate 1); Director approval + merge pending |
 | G2 | 4 | Director approval workflow & RBAC | ⏳ | PR #2 approved |
 | G3 | 5 | Task management & Hermes synchronization | ⏳ | PR #3 approved |
 | G4 | 6 | Security audit & reliability | ⏳ | PR #4 approved + audit report |
 | G5 | 7 | Deployment rehearsal & integration | ⏳ | PR #5 approved + staging sign-off |
-| G6 | 10 | Final release & production deploy | ⏳ | Production verified |
+| G6 | 10 | Final release & production deploy | ⏳ | Production verified + Live Hermes Runtime Integration gate passed |
+
+> **PR numbering note (2026-11-20):** PR #2 is currently the GitHub Actions CI PR
+> (`chore/github-actions-ci`, stacked on PR #1). The "PR #2 … PR #5" references in
+> gates G2–G6 refer to the future phase PRs as originally planned; the Phase 4
+> approval-workflow PR will therefore carry a later number.
+>
+> **Outstanding production-readiness blocker:** Live Hermes Runtime Integration
+> verification (kanban `t_e15f8a03`) must pass before Gate G6. Simulated Hermes
+> events in unit/E2E/CI tests do **not** satisfy this gate.
 
 ---
 
 ## Gate 1: Phase 3.2 — Final Stabilization & E2E Verification
 
 ### Implementation Requirements
-- [ ] **3.2.1** WebSocket authentication fixed — Director login works, session cookie set for WS
-- [ ] **3.2.2** No 401 errors on `/api/demo/status` or other authenticated endpoints after login
-- [ ] **3.2.3** Runtime lifecycle separation verified — watchdog publishes `runtime.status.changed` only, never overwrites agent lifecycle
-- [ ] **3.2.4** WebSocket reconnect with exponential backoff (max 10 attempts, capped 20s)
-- [ ] **3.2.5** Test-only endpoints (`/api/test/*`) secured — only in dev, auth + director required
-- [ ] **3.2.6** All 48 unit tests pass (27 baseline + 22 Phase 3)
-- [ ] **3.2.7** All 13 E2E tests pass (5 Phase 3.1 + 6 Phase 3.2 + 2 debug)
-- [ ] **3.2.8** PR #1 updated with passing evidence
+- [x] **3.2.1** WebSocket authentication fixed — Director login works, session cookie set for WS *(verified at `22d66b6`: express-session owns the signed `bvo_session` cookie; WS handshake accepts it — PR #1 evidence)*
+- [x] **3.2.2** No 401 errors on `/api/demo/status` or other authenticated endpoints after login *(verified at `22d66b6`: unsigned duplicate cookie removed; E2E authenticates through the real browser UI)*
+- [x] **3.2.3** Runtime lifecycle separation verified — watchdog publishes `runtime.status.changed` only, never overwrites agent lifecycle *(verified: unit suites + E2E disconnect/recovery preserve lifecycle)*
+- [x] **3.2.4** WebSocket reconnect with exponential backoff (max 10 attempts, capped 20s) *(verified in `public/assets/js/realtime/websocket-client.js`: `maxReconnectAttempts = 10`, ×1.5 backoff capped at 20000ms; recovery exercised by E2E)*
+- [x] **3.2.5** Test-only endpoints (`/api/test/*`) secured — only in dev, auth + director required *(verified: explicit `ENABLE_TEST_ROUTES=true` + non-production + director session + CSRF; production hard-lock 404 unit-tested)*
+- [x] **3.2.6** All unit & integration tests pass — **98 passed / 0 failed / 0 skipped** (13 files). *Supersedes the original target "48 unit tests (27 baseline + 22 Phase 3)"; the suite was expanded during Phase 3.2.2.*
+- [x] **3.2.7** All Playwright E2E tests pass — **10 passed / 0 failed / 0 skipped** (5 Phase 3.1 smoke + 5 Phase 3.2 lifecycle). *Supersedes the original target "13 E2E (5 Phase 3.1 + 6 Phase 3.2 + 2 debug)"; the suite was restructured and debug scenarios removed.*
+- [x] **3.2.8** PR #1 updated with passing evidence *(PR #1 body contains the full Phase 3.2.2 report; tested SHA == PR HEAD `22d66b69ccccb12004d855432f9c90c3feff270f`)*
 
-### Test Evidence Required
-| Test | Command | Expected Result | Actual Result | ✅/❌ |
-|------|---------|-----------------|---------------|------|
-| Unit suite | `npm test` | 48 passed | | ⏳ |
-| Runtime watchdog | `npm test -- tests/unit/runtime-watchdog.test.js` | 8 passed | | ⏳ |
-| Phase 3 integration | `npm test -- tests/unit/phase3-integration.test.js` | 22 passed | | ⏳ |
-| E2E: Login + WS | `npx playwright test --grep "login\|WebSocket"` | 2 passed | | ⏳ |
-| E2E: Phase 3.1 | `npx playwright test --grep "PHASE 3.1"` | 5 passed | | ⏳ |
-| E2E: Phase 3.2 | `npx playwright test --grep "PHASE 3.2"` | 6 passed | | ⏳ |
-| Full E2E | `npx playwright test` | 13 passed | | ⏳ |
-| CSS build | `npm run build:css` | Success | | ⏳ |
+### Verified Test Evidence — Phase 3.2.2 (historical, commit `22d66b6`)
+
+Local verification executed on the exact tree committed as PR #1 HEAD
+`22d66b69ccccb12004d855432f9c90c3feff270f` (evidence recorded in the PR #1 body).
+
+| Test | Command | Verified Result | ✅/❌ |
+|------|---------|-----------------|------|
+| Unit & integration suite | `npm test` | **98 passed, 0 failed, 0 skipped** (13 files) | ✅ |
+| CSS build | `npm run build:css` | **Success** (tailwindcss v4.3.5) | ✅ |
+| Full Playwright E2E | `npx playwright test` | **10 passed, 0 failed, 0 skipped** (chromium, 1 worker, serial) | ✅ |
+
+E2E breakdown: 5 PHASE 3.1 smoke (page+agents render, runtime indicator, navigation, HUD, WS without errors) + 5 PHASE 3.2 lifecycle (login→assign→queued→working→completed→idle; failed execution; runtime disconnect preserving lifecycle; runtime recovery; browser refresh restoring authoritative snapshot).
+
+### Current CI Verification — GitHub Actions, PR #2 (commit `5d56112`)
+
+Re-verification of the same suites (plus dependency audit) on **GitHub-hosted `ubuntu-latest` runners** — no homelab execution.
+
+- **PR:** #2 (`chore/github-actions-ci` → `fix/security-hardening`, stacked on PR #1)
+- **Commit:** `5d56112d22c4920ac4808a9abb46eacea2f52ae6` (== PR #2 HEAD)
+- **Workflow run:** [44670861607](https://github.com/herdianrony/bangron-virtual-office/actions/runs/44670861607) (`pull_request`, conclusion: success). Push run [44670856416](https://github.com/herdianrony/bangron-virtual-office/actions/runs/44670856416) on the same commit also green.
+
+| CI Job | Verified Result | ✅/❌ |
+|--------|-----------------|------|
+| Unit & Integration Tests | **98 passed, 0 failed, 0 skipped** (13 files) | ✅ |
+| CSS Build | **Success** | ✅ |
+| Playwright E2E | **10 passed, 0 failed, 0 skipped** (chromium, 1 worker) | ✅ |
+| Security & Dependency Audit | **Success** — `npm audit --audit-level=high`: 0 critical / 0 high (2 moderate baseline, non-blocking) | ✅ |
+
+CI E2E runs entirely inside the runner: app server on port 3102 with a dedicated freshly-seeded SQLite DB; synthetic CI-only credentials; no production data, no real Hermes dispatch.
+
+### Superseded Historical Targets (original Phase 3.2 plan — preserved for context)
+
+The targets below were written before the Phase 3.2.2 suite expansion/restructuring.
+They are **superseded** by the verified results above (98 unit/integration, 10 E2E)
+and are kept unchanged for historical traceability. Subset commands/counts no longer
+map 1:1 to the current suite layout.
+
+| Test | Command | Original Target (superseded) |
+|------|---------|------------------------------|
+| Unit suite | `npm test` | 48 passed |
+| Runtime watchdog | `npm test -- tests/unit/runtime-watchdog.test.js` | 8 passed |
+| Phase 3 integration | `npm test -- tests/unit/phase3-integration.test.js` | 22 passed |
+| E2E: Login + WS | `npx playwright test --grep "login\|WebSocket"` | 2 passed |
+| E2E: Phase 3.1 | `npx playwright test --grep "PHASE 3.1"` | 5 passed |
+| E2E: Phase 3.2 | `npx playwright test --grep "PHASE 3.2"` | 6 passed |
+| Full E2E | `npx playwright test` | 13 passed |
+| CSS build | `npm run build:css` | Success |
+
+### Evidence Scope & Limitations (what this evidence does NOT prove)
+
+- All Hermes lifecycle events in the unit/E2E/CI suites are **simulated** through the HMAC-signed webhook contract with `HERMES_RUNTIME_VERIFIED=false` and a dead-port `HERMES_API_URL` (watchdog cannot reach a live runtime).
+- **Simulated CI events do NOT prove live Hermes runtime integration.** Real dispatch (`POST /v1/runs`), run tracking, and live event reconciliation remain unverified — see the outstanding gate below and Gate G6.
+- E2E covers the chromium project only.
 
 ### Security Verification
-- [ ] No secrets in logs or test output
-- [ ] Session cookies: `HttpOnly`, `Secure` (prod), `SameSite=Lax`
-- [ ] Helmet headers present on all responses
-- [ ] Webhook HMAC validation enforced
+- [x] No secrets in logs or test output *(synthetic CI-only test credentials; no production secrets in repo or runner env)*
+- [x] Session cookies: `HttpOnly`, `Secure` (prod), `SameSite=Lax` *(asserted in E2E + production-config unit tests at `22d66b6`)*
+- [x] Helmet headers present on all responses *(production security headers enabled; production-config tests)*
+- [x] Webhook HMAC validation enforced *(secret + timestamp + exact raw-body HMAC-SHA256; exercised by E2E via signed webhook events)*
 
 ### Director Approval
 - [ ] **Director reviews PR #1** with all test evidence
 - [ ] **Director explicitly approves** merge to main
 - [ ] **Merge completed** — Gate 1 ✅ Verified
+
+**Status (2026-11-20):** Phase 3.2.2 declared COMPLETE by Director decision (recorded in a PR #1 comment); PR #1 is READY FOR DIRECTOR REVIEW. Test evidence is verified, but Gate 1 remains ⏳ until explicit merge approval. PR #1 and PR #2 are both open and unmerged; `main` untouched (`82fc1f6`).
+
+### Outstanding Verification Gate — Live Hermes Runtime Integration (G6 blocker)
+
+**Not covered by any evidence above. Remains ⏳ outstanding.**
+
+- Tracked as kanban `t_e15f8a03` (software-house board, assignee backend, status blocked); scheduled around Phase 5 / Gate G3; **must pass before Gate G6 (production readiness)**.
+- Scope: confirm the transport supported by the installed Hermes version and its signature/timestamp contract; verify real dispatch `POST /v1/runs` with run_id storage and event reconciliation; verify real execution/failure events map to agent/task lifecycles; verify watchdog against the live API (connect/disconnect/recovery); document evidence.
+- The `HERMES_RUNTIME_VERIFIED` flag may only be enabled for production after this gate passes.
+- This is a production-readiness blocker, **not** a Phase 4 blocker.
 
 ---
 
@@ -241,6 +303,12 @@ Each gate requires: **implementation + tests passing + Director approval**.
 
 ## Gate 6: Day 10 — Final Release & Production Deployment
 
+> **Outstanding prerequisite (G6 production-readiness blocker):** Live Hermes Runtime
+> Integration verification (kanban `t_e15f8a03`; see Gate 1 "Outstanding Verification
+> Gate") must pass before this gate can be verified. Simulated Hermes events in
+> unit/E2E/CI tests — including the green PR #2 CI run — do **not** satisfy this
+> prerequisite.
+
 ### Implementation Requirements
 - [ ] **10.1** Full regression suite: unit + integration + E2E all pass on RC commit
 - [ ] **10.2** Final security review: secrets rotated for prod, headers, deps, audit log complete
@@ -295,7 +363,7 @@ Each gate requires: **implementation + tests passing + Director approval**.
 
 | Component | Implemented | Tested | Verified | Approved | Released |
 |-----------|-------------|--------|----------|----------|----------|
-| **Phase 3.2 Stabilization** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| **Phase 3.2 Stabilization** | ✅ | ✅ | ✅ | ⏳ | ⏳ |
 | **Phase 4 Approval Workflow** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **Phase 5 Task Management** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **Phase 6 Security & Reliability** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -307,6 +375,10 @@ Each gate requires: **implementation + tests passing + Director approval**.
 | **Database & Migrations** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **Monitoring & Logging** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **Documentation** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+**Matrix notes (2026-11-20):**
+- *Phase 3.2 Stabilization:* Implemented/Tested/Verified reflect the Phase 3.2.2 evidence at `22d66b6` and CI re-verification at `5d56112` (98 unit/integration + 10 E2E + CSS build). Approved/Released remain ⏳ pending Director merge approval of PR #1.
+- *Hermes Integration:* simulated-event processing (webhook HMAC → reconciler → WS → store) is tested and passing; **live** runtime integration remains unverified (outstanding G6 blocker, kanban `t_e15f8a03`).
 
 **Legend:**
 - ⏳ = Not yet / In Progress
@@ -372,10 +444,12 @@ PROJECT STATUS: ✅ COMPLETE / ❌ INCOMPLETE
 4. **Production deployment requires your explicit authorization** — no automatic deploy
 5. **Rollback must be tested** before production deploy
 6. **All evidence must be verifiable** — PR comments, CI logs, screenshots, artifacts
+7. **Simulated ≠ live** — green unit/E2E/CI results with simulated Hermes events do not prove live Hermes runtime integration; that verification is an outstanding G6 production-readiness blocker
+8. **Superseded targets are preserved** — original Phase 3.2 test targets (48 unit / 13 E2E) are kept for historical context and labeled superseded; the verified counts are 98 unit/integration and 10 E2E
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Owner:** Main Agent (PM/QA Coordinator)
 **Authority:** Human Director (herdianrony)
-**Next Review:** Day 1 EOD (2026-11-20) for Gate 1
+**Next Review:** Director review of PR #1 (Gate 1) — pending; Live Hermes Runtime Integration gate scheduled around Phase 5 / G3
