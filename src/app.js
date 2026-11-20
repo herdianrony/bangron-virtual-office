@@ -117,8 +117,10 @@ export function createApp(customDb = null) {
   app.use('/api/demo', demoRoutes);
   app.use('/api/integrations/hermes', hermesRoutes);
 
-  // Test-only routes (development / E2E only — never in production).
-  if (appConfig.isProduction === false) {
+  // Test-only routes: require the EXPLICIT ENABLE_TEST_ROUTES=true opt-in and
+  // a non-production environment (see config/app.js). Disabled by default;
+  // never mounted in production even if the flag leaks into the environment.
+  if (appConfig.testRoutesEnabled) {
     app.use('/api', createTestRoutes());
   }
 

@@ -27,7 +27,7 @@ export class ApprovalRepository {
       params.push(filters.status);
     }
 
-    query += ' ORDER BY CASE a.status WHEN "pending" THEN 1 ELSE 2 END, a.created_at DESC';
+    query += " ORDER BY CASE a.status WHEN 'pending' THEN 1 ELSE 2 END, a.created_at DESC";
     return this.db.prepare(query).all(...params);
   }
 

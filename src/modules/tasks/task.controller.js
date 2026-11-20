@@ -56,13 +56,15 @@ export class TaskController {
     }
   };
 
-  assign = (req, res) => {
+  assign = async (req, res) => {
     try {
       const { agentId } = req.body;
       if (!agentId) {
         return sendError(res, 'VALIDATION_ERROR', 'agentId is required', [], 400);
       }
-      const updated = this.taskService.assignAgent(req.params.id, agentId, req.user ? String(req.user.id) : 'director');
+      // assignAgent is async (Hermes dispatch). Await it so the response
+      // carries the real updated task instead of a serialized Promise ({}).
+      const updated = await this.taskService.assignAgent(req.params.id, agentId, req.user ? String(req.user.id) : 'director');
       return sendSuccess(res, updated, 'Task assigned to agent');
     } catch (err) {
       return sendError(res, 'TASK_ASSIGN_ERROR', err.message, [], 400);

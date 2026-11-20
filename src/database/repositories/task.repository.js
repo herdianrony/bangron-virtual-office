@@ -43,7 +43,7 @@ export class TaskRepository {
       }
     }
 
-    query += ' ORDER BY CASE t.priority WHEN "critical" THEN 1 WHEN "high" THEN 2 WHEN "normal" THEN 3 ELSE 4 END, t.created_at DESC';
+    query += " ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, t.created_at DESC";
 
     return this.db.prepare(query).all(...params);
   }
