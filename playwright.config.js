@@ -25,7 +25,10 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'node src/server.js',
+    // Provision the isolated E2E database FIRST, then start the app server.
+    // Playwright starts webServer before globalSetup, so the DB must be
+    // seeded before the server opens it (see tests/e2e/prepare-db.js).
+    command: 'node tests/e2e/prepare-db.js && node src/server.js',
     env: E2E_ENV,
     port: E2E_PORT,
     baseURL: `http://localhost:${E2E_PORT}`,
