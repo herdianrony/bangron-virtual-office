@@ -4,8 +4,8 @@
 **Repository:** https://github.com/herdianrony/bangron-virtual-office
 **Working Branch:** `fix/security-hardening`
 **Target:** 10 working days (Mon 2026-11-20 → Fri 2026-12-04)
-**Current HEAD:** `f128b3d` (Exclude E2E tests from vitest run)
-**Current PR:** #1 — Security hardening and top-down visual foundation (DRAFT)
+**Current HEAD:** `5a23e358cf7ae936d9f87fa45af130607fa1fe9c` (docs: PR numbering alignment; tested code SHA for Phase 3.2.2 evidence: `22d66b6`)
+**Current PR:** #1 — Security hardening and top-down visual foundation (DRAFT, OPEN — ready for Director review; merge awaits explicit approval). PR #2 (GitHub Actions CI, head `5d56112`) is stacked on PR #1; both unmerged; `main` at `82fc1f6`.
 
 > **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Task references below use this numbering.
 
@@ -15,12 +15,13 @@
 
 | Metric | Status |
 |--------|--------|
-| Unit Tests | **48 passing** (27 baseline + 22 Phase 3) |
-| E2E Tests | **13 defined, 0 passing** (auth/session issues, timeout) |
-| Hermes Runtime | **Verified** at `http://localhost:8642` with API key |
+| Unit & Integration Tests | **98 passed / 0 failed / 0 skipped** (13 files) — verified at `22d66b6`, re-verified by CI at `5d56112` (original target of 48 superseded) |
+| E2E Tests (Playwright) | **10 passed / 0 failed / 0 skipped** (5 Phase 3.1 smoke + 5 Phase 3.2 lifecycle, chromium) — auth/session issues fixed in Phase 3.2.2 (original target of 13 superseded) |
+| CSS Build | **Successful** (`npm run build:css`, tailwindcss v4.3.5) |
+| Hermes Runtime | **LIVE INTEGRATION UNVERIFIED** — all test evidence uses simulated HMAC-signed webhook events (`HERMES_RUNTIME_VERIFIED=false`); live dispatch/run tracking outstanding (G6 production-readiness blocker, kanban `t_e15f8a03`). Earlier "verified at localhost:8642" claim superseded. |
 | Phase 3.1 | **Implemented** (lifecycle/runtime separation, watchdog) |
-| Phase 3.2 | **Partially implemented** (tests written, need fix) |
-| Phases 4–7 | **Not started** |
+| Phase 3.2 | **Completed** (Phase 3.2.2, commit `22d66b6`) — awaiting Director's merge approval of PR #1 |
+| Phases 4–7 | **Not started** (planned only; no implementation) |
 
 **Critical Path:** Phase 3.2 → Phase 4 → Phase 5 → Phase 6 → Phase 7 → Release
 **Parallelizable:** Backend + Frontend + Hermes Integration + QA + Security + DevOps
@@ -31,7 +32,7 @@
 
 | Phase | Days | Focus | Status |
 |-------|------|-------|--------|
-| **3.2** | Day 1 | Final stabilization, E2E, WebSocket reconnect, watchdog verification | 🔄 In Progress |
+| **3.2** | Day 1 | Final stabilization, E2E, WebSocket reconnect, watchdog verification | ✅ Completed (awaiting Director merge approval of PR #1) |
 | **4** | Days 2–3 | Director approval workflow, RBAC, audit logs | ⏳ Planned |
 | **5** | Days 4–5 | Task management, agent assignment, collaboration, Hermes sync | ⏳ Planned |
 | **6** | Days 6–7 | Security audit, backup/recovery, WebSocket stability, logging, performance | ⏳ Planned |
@@ -46,16 +47,18 @@
 
 | Task ID | Description | Priority | Specialist | Dependencies | Est. Duration | Acceptance Criteria | Test Commands | Status | Evidence |
 |---------|-------------|----------|------------|--------------|---------------|---------------------|---------------|--------|----------|
-| 3.2.1 | Fix E2E login/session authentication | 🔴 Critical | Frontend Engineer | None | 2h | Director login works via Playwright; session cookie set for WS | `npx playwright test tests/e2e/office-e2e.test.js --grep "director login"` | ⏳ Planned | — |
-| 3.2.2 | Fix WebSocket session cookie propagation | 🔴 Critical | Backend Engineer | 3.2.1 | 1h | WS connects authenticated after login; no 401 on `/api/demo/status` | `npx playwright test tests/e2e/office-e2e.test.js --grep "WebSocket"` | ⏳ Planned | — |
-| 3.2.3 | Verify runtime lifecycle separation (watchdog) | 🟠 High | Backend Engineer | None | 1h | Runtime disconnect does NOT overwrite agent lifecycle status | `npm test -- tests/unit/runtime-watchdog.test.js` | ⏳ Planned | — |
-| 3.2.4 | Verify WebSocket reconnect with exponential backoff | 🟠 High | Frontend Engineer | 3.2.2 | 1h | Client reconnects after server restart; max 10 attempts, capped 20s | Manual: kill server, observe reconnect logs | ⏳ Planned | — |
-| 3.2.5 | Secure test-only endpoints (`/api/test/*`) | 🟠 High | Security Engineer | None | 30m | Routes only mounted in `!isProduction`; auth + director required | `curl -X POST localhost:3002/api/test/runtime-status` (401 without auth) | ⏳ Planned | — |
-| 3.2.6 | Run full unit test suite | 🟢 Medium | QA Automation | 3.2.3 | 15m | All 48 unit tests pass | `npm test` | ⏳ Planned | — |
-| 3.2.7 | Run full E2E test suite | 🔴 Critical | QA Automation | 3.2.1, 3.2.2 | 30m | All 13 E2E tests pass (incl. Phase 3.2 lifecycle tests) | `npx playwright test` | ⏳ Planned | — |
-| 3.2.8 | Commit fixes and update PR #1 | 🟢 Medium | Main Agent | 3.2.7 | 15m | PR #1 updated with passing E2E evidence | `git commit -am "Phase 3.2: E2E fixes"` | ⏳ Planned | — |
+| 3.2.1 | Fix E2E login/session authentication | 🔴 Critical | Frontend Engineer | None | 2h | Director login works via Playwright; session cookie set for WS | `npx playwright test tests/e2e/office-e2e.test.js --grep "director login"` | ✅ Done | PR #1 body @ `22d66b6`; CI run 44670861607 |
+| 3.2.2 | Fix WebSocket session cookie propagation | 🔴 Critical | Backend Engineer | 3.2.1 | 1h | WS connects authenticated after login; no 401 on `/api/demo/status` | `npx playwright test tests/e2e/office-e2e.test.js --grep "WebSocket"` | ✅ Done | PR #1 body @ `22d66b6`; CI run 44670861607 |
+| 3.2.3 | Verify runtime lifecycle separation (watchdog) | 🟠 High | Backend Engineer | None | 1h | Runtime disconnect does NOT overwrite agent lifecycle status | `npm test -- tests/unit/runtime-watchdog.test.js` | ✅ Done | Included in 98-test suite; E2E disconnect/recovery |
+| 3.2.4 | Verify WebSocket reconnect with exponential backoff | 🟠 High | Frontend Engineer | 3.2.2 | 1h | Client reconnects after server restart; max 10 attempts, capped 20s | Manual: kill server, observe reconnect logs | ✅ Done | Code verified (10 attempts, ×1.5 backoff, 20s cap); E2E recovery |
+| 3.2.5 | Secure test-only endpoints (`/api/test/*`) | 🟠 High | Security Engineer | None | 30m | Explicit `ENABLE_TEST_ROUTES=true` + non-production + director session + CSRF; production hard-lock 404 (supersedes `!isProduction`-only boundary) | `npm test -- tests/unit/test-routes-isolation.test.js` (original curl probe superseded) | ✅ Done | Unit + production-config tests @ `22d66b6` |
+| 3.2.6 | Run full unit test suite | 🟢 Medium | QA Automation | 3.2.3 | 15m | **98 passed / 0 failed / 0 skipped** (13 files) — original target "All 48 unit tests pass" superseded | `npm test` | ✅ Done | PR #1 body @ `22d66b6`; CI job Unit & Integration Tests @ `5d56112` |
+| 3.2.7 | Run full E2E test suite | 🔴 Critical | QA Automation | 3.2.1, 3.2.2 | 30m | **10 passed / 0 failed / 0 skipped** (5 smoke + 5 lifecycle) — original target "All 13 E2E tests pass" superseded | `npx playwright test` | ✅ Done | PR #1 body @ `22d66b6`; CI job Playwright E2E @ `5d56112` |
+| 3.2.8 | Commit fixes and update PR #1 | 🟢 Medium | Main Agent | 3.2.7 | 15m | PR #1 updated with passing E2E evidence | `git commit -am "Phase 3.2: E2E fixes"` | ✅ Done | Tested SHA `22d66b6` == PR HEAD at time of testing |
 
-**Day 1 Deliverable:** All Phase 3.2 tests passing; PR #1 ready for review.
+> Note: the `--grep` subset commands for 3.2.1/3.2.2 are the original plan's commands (superseded — the E2E suite was restructured into 10 scenarios; verification runs via the full `npx playwright test`).
+
+**Day 1 Deliverable (achieved 2026-11-20):** 98 unit/integration + 10 E2E passing, CSS build successful at commit `22d66b6`; CI re-verification green at `5d56112` (run 44670861607). PR #1 ready for Director review; merge awaits explicit approval.
 
 ---
 
@@ -262,6 +265,6 @@ At end of each working day, update this file and post PR comment:
 
 ---
 
-**Last Updated:** 2026-11-20 11:44 WIB (PR numbering consistency revision; original plan 2026-11-20 03:45 WIB)
+**Last Updated:** 2026-11-20 12:14 WIB (evidence synchronization; PR numbering revision 11:44 WIB; original plan 2026-11-20 03:45 WIB)
 **Next Review:** End of Day 1 (2026-11-20)
 **Main Agent:** Hermes (Project Manager & QA Coordinator)

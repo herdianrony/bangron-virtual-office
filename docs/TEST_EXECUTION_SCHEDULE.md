@@ -2,7 +2,7 @@
 
 **Project:** Bangron Virtual Office
 **Acceleration Period:** 10 Working Days (2026-11-20 → 2026-12-04)
-**Schedule Version:** 1.1
+**Schedule Version:** 1.2
 **Timezone:** WIB (UTC+07:00)
 
 > **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Day/gate references below use this numbering.
@@ -18,7 +18,8 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 - **Isolated infrastructure** per test run (fresh DB, clean state)
 - **No persistent jobs** in production — all scheduling via CI/CD or manual trigger
 - **Destructive tests** (backup/restore, migration down) only on staging
-- **Real Hermes** only for integration/E2E; mocked for unit
+- **Hermes events simulated** (HMAC-signed webhook, `HERMES_RUNTIME_VERIFIED=false`) for unit/E2E/CI — simulated tests never count as live Hermes verification; live runtime integration is a separate outstanding gate (G6 blocker, kanban `t_e15f8a03`)
+- **GitHub-hosted runners** execute routine CI tests (PR #2 workflow); the homelab is reserved for application runtime and live Hermes integration verification
 - **Evidence required** for every test result (logs, screenshots, artifacts)
 
 ---
@@ -26,26 +27,28 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 ## Daily Test Schedule (Days 1–10)
 
 ### Day 1 — 2026-11-20 (Thursday) — Phase 3.2 Stabilization
+
+**Status: ✅ Executed 2026-11-20 at commit `22d66b6` (98 unit/integration + 10 E2E + CSS build); CI re-verified at `5d56112`, run 44670861607. Original subset counts below are superseded where labeled.**
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
-| 09:00 | Unit tests (baseline) | `npm test` | QA | JUnit XML, 48/48 pass |
-| 09:30 | CSS build | `npm run build:css` | Frontend | Bundle file exists |
-| 10:00 | Runtime watchdog unit | `npm test -- tests/unit/runtime-watchdog.test.js` | Backend | 8/8 pass |
-| 10:30 | Phase 3 integration | `npm test -- tests/unit/phase3-integration.test.js` | Backend | 22/22 pass |
-| 11:00 | E2E: Login + WS auth fix verification | `npx playwright test tests/e2e/office-e2e.test.js --grep "login\|WebSocket"` | QA | Screenshots, 2/2 pass |
-| 14:00 | E2E: Full Phase 3.1 suite | `npx playwright test tests/e2e/office-e2e.test.js --grep "PHASE 3.1"` | QA | 5/5 pass, screenshots |
-| 15:00 | E2E: Full Phase 3.2 suite | `npx playwright test tests/e2e/office-e2e.test.js --grep "PHASE 3.2"` | QA | 6/6 pass, screenshots |
-| 16:00 | All E2E (regression) | `npx playwright test` | QA | 13/13 pass, HTML report |
+| 09:00 | Unit tests (baseline) | `npm test` | QA | **98 passed / 0 failed / 0 skipped** (13 files); original 48/48 target superseded |
+| 09:30 | CSS build | `npm run build:css` | Frontend | ✅ Success (tailwindcss v4.3.5) |
+| 10:00 | Runtime watchdog unit | `npm test -- tests/unit/runtime-watchdog.test.js` | Backend | Included in 98-test suite (original 8/8 subset count superseded) |
+| 10:30 | Phase 3 integration | `npm test -- tests/unit/phase3-integration.test.js` | Backend | Included in 98-test suite (original 22/22 subset count superseded) |
+| 11:00 | E2E: Login + WS auth fix verification | `npx playwright test` (original `--grep "login\|WebSocket"` subset superseded) | QA | Covered by lifecycle E2E (original 2/2 subset superseded); screenshots in PR #1 |
+| 14:00 | E2E: Full Phase 3.1 suite | `npx playwright test tests/e2e/office-e2e.test.js --grep "PHASE 3.1"` | QA | ✅ 5/5 smoke tests pass (part of the 10-test suite), screenshots |
+| 15:00 | E2E: Full Phase 3.2 suite | `npx playwright test tests/e2e/office-e2e.test.js --grep "PHASE 3.2"` | QA | ✅ 5/5 lifecycle tests pass (original 6/6 target superseded; suite restructured), screenshots |
+| 16:00 | All E2E (regression) | `npx playwright test` | QA | **10 passed / 0 failed / 0 skipped** (chromium, 1 worker); original 13/13 target superseded; HTML report |
 | 17:00 | **Day 1 Report** | Update roadmap + PR #1 comment | Main Agent | Markdown report |
 
-**Day 1 Gate:** All 48 unit + 13 E2E tests pass → Phase 3.2 complete
+**Day 1 Gate (achieved):** 98 unit/integration + 10 E2E tests pass + CSS build success → Phase 3.2 complete; awaiting Director's merge approval of PR #1 (original target 48 unit + 13 E2E superseded)
 
 ---
 
 ### Day 2 — 2026-11-21 (Friday) — Phase 4: Approval Workflow (Part 1)
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
-| 09:00 | Unit tests (regression) | `npm test` | QA | 48+/48+ pass |
+| 09:00 | Unit tests (regression) | `npm test` | QA | 98+/98+ pass (baseline 98 at `22d66b6`) |
 | 09:30 | Approval unit tests (new) | `npm test -- tests/unit/approval*.test.js` | Backend | All new tests pass |
 | 10:30 | RBAC unit tests (new) | `npm test -- tests/unit/rbac.test.js` | Backend | All new tests pass |
 | 11:00 | Audit log unit tests (new) | `npm test -- tests/unit/audit.test.js` | Backend | All new tests pass |
@@ -210,27 +213,31 @@ tests/e2e/screenshots/
 
 ## CI/CD Automation
 
-### GitHub Actions Triggers
-```yaml
-# On every push to fix/security-hardening
-on:
-  push:
-    branches: [fix/security-hardening]
-  pull_request:
-    branches: [main]
+### GitHub Actions Triggers (actual workflow, PR #2)
 
-# Scheduled daily at 06:00 WIB (23:00 UTC)
+All jobs run on **GitHub-hosted `ubuntu-latest` runners** — never on the homelab. The homelab is reserved for application runtime and live Hermes integration verification.
+
+```yaml
+# .github/workflows/ci.yml (PR #2, chore/github-actions-ci)
 on:
-  schedule:
-    - cron: '0 23 * * 1-5'  # Mon-Fri
+  pull_request:
+    branches: [main, fix/security-hardening]
+  push:
+    branches: [main, fix/security-hardening, 'feat/**', 'fix/**', 'chore/**']
+  workflow_dispatch:
 ```
 
-### Required Status Checks (Branch Protection)
-- `unit-tests` — 48+ tests pass
-- `css-build` — bundle generated
-- `e2e-tests` — 13+ tests pass
-- `security-scan` — 0 critical/high
-- `integration-tests` — API+WS+DB pass
+(Original planning snippet with a daily cron schedule superseded — the implemented workflow has no scheduled trigger.)
+
+### Required Status Checks (Branch Protection — recommended, NOT yet applied)
+
+Exact job names from the PR #2 workflow (verified green in run 44670861607 at `5d56112`):
+- `Unit & Integration Tests` — 98 passed / 0 failed / 0 skipped
+- `CSS Build` — bundle generated successfully
+- `Playwright E2E` — 10 passed / 0 failed / 0 skipped
+- `Security & Dependency Audit` — 0 critical/high (2 moderate baseline, non-blocking)
+
+Applying these as required checks needs Director approval; no branch protection has been changed. (Original planning names `unit-tests`/`css-build`/`e2e-tests`/`security-scan`/`integration-tests` superseded.)
 
 ---
 
@@ -290,12 +297,12 @@ HERMES_URL=https://hermes-staging.bangron.my.id npx playwright test tests/e2e/he
 ### Test Execution Dashboard (Daily Update)
 | Suite | Day 1 | Day 2 | Day 3 | Day 4 | Day 5 | Day 6 | Day 7 | Day 8 | Day 9 | Day 10 |
 |-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|--------|
-| Unit | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 |
-| CSS Build | 🎯 | | | | | | | | | 🎯 |
-| Watchdog | 🎯 | | | | | | | | | |
-| Phase 3 Int | 🎯 | | | | | | | | | |
-| E2E Phase 3.1 | 🎯 | | | | | | | | | 🎯 |
-| E2E Phase 3.2 | 🎯 | | | | | | | | | 🎯 |
+| Unit | ✅ | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 | 🎯 |
+| CSS Build | ✅ | | | | | | | | | 🎯 |
+| Watchdog | ✅ | | | | | | | | | |
+| Phase 3 Int | ✅ | | | | | | | | | |
+| E2E Phase 3.1 | ✅ | | | | | | | | | 🎯 |
+| E2E Phase 3.2 | ✅ | | | | | | | | | 🎯 |
 | Approval Unit | | 🎯 | 🎯 | | | | | | | |
 | RBAC Unit | | 🎯 | | | | | | | | |
 | Audit Unit | | 🎯 | | | | | | | | |
@@ -318,6 +325,8 @@ HERMES_URL=https://hermes-staging.bangron.my.id npx playwright test tests/e2e/he
 | Acceptance | | | | | | | | | 🎯 | |
 | Production Deploy | | | | | | | | | | 🎯 |
 | Post-Deploy Verify | | | | | | | | | | 🎯 |
+
+**Day 1 column:** executed 2026-11-20 at `22d66b6` — 98 unit/integration (incl. watchdog + Phase 3 integration subsets), 10 E2E (5 smoke + 5 lifecycle), CSS build success; CI re-verified at `5d56112` (run 44670861607).
 
 **Legend:** 🎯 = Scheduled | ✅ = Passed | ❌ = Failed | ⏭️ = Skipped | ⏳ = Pending
 
@@ -348,7 +357,7 @@ HERMES_URL=https://hermes-staging.bangron.my.id npx playwright test tests/e2e/he
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Owner:** Main Agent (PM/QA Coordinator)
 **Review:** Daily at 17:00 WIB
-**Next Update:** 2026-11-20 17:00 WIB (Day 1 Report)
+**Next Update:** Day 2 (2026-11-21) — Phase 4 start requires Director approval of PR #1 merge

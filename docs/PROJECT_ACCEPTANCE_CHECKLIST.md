@@ -4,7 +4,7 @@
 **Repository:** https://github.com/herdianrony/bangron-virtual-office
 **Target Release:** v1.0.0
 **Acceptance Authority:** Human Director (herdianrony)
-**Checklist Version:** 1.2
+**Checklist Version:** 1.3
 **Last Updated:** 2026-11-20
 
 ---
@@ -46,12 +46,13 @@ Each gate requires: **implementation + tests passing + Director approval**.
 - [x] **3.2.5** Test-only endpoints (`/api/test/*`) secured — only in dev, auth + director required *(verified: explicit `ENABLE_TEST_ROUTES=true` + non-production + director session + CSRF; production hard-lock 404 unit-tested)*
 - [x] **3.2.6** All unit & integration tests pass — **98 passed / 0 failed / 0 skipped** (13 files). *Supersedes the original target "48 unit tests (27 baseline + 22 Phase 3)"; the suite was expanded during Phase 3.2.2.*
 - [x] **3.2.7** All Playwright E2E tests pass — **10 passed / 0 failed / 0 skipped** (5 Phase 3.1 smoke + 5 Phase 3.2 lifecycle). *Supersedes the original target "13 E2E (5 Phase 3.1 + 6 Phase 3.2 + 2 debug)"; the suite was restructured and debug scenarios removed.*
-- [x] **3.2.8** PR #1 updated with passing evidence *(PR #1 body contains the full Phase 3.2.2 report; tested SHA == PR HEAD `22d66b69ccccb12004d855432f9c90c3feff270f`)*
+- [x] **3.2.8** PR #1 updated with passing evidence *(PR #1 body contains the full Phase 3.2.2 report; tested SHA `22d66b69ccccb12004d855432f9c90c3feff270f` == PR #1 HEAD at the time of testing; later HEAD advances `f8f235d`, `5a23e35` are documentation-only)*
 
 ### Verified Test Evidence — Phase 3.2.2 (historical, commit `22d66b6`)
 
-Local verification executed on the exact tree committed as PR #1 HEAD
-`22d66b69ccccb12004d855432f9c90c3feff270f` (evidence recorded in the PR #1 body).
+Local verification executed on the exact tree committed as PR #1 HEAD at the time of
+testing, `22d66b69ccccb12004d855432f9c90c3feff270f` (evidence recorded in the PR #1 body;
+subsequent PR #1 commits are documentation-only).
 
 | Test | Command | Verified Result | ✅/❌ |
 |------|---------|-----------------|------|
@@ -451,7 +452,7 @@ PROJECT STATUS: ✅ COMPLETE / ❌ INCOMPLETE
 
 ---
 
-**Document Version:** 1.2
+**Document Version:** 1.3
 **Owner:** Main Agent (PM/QA Coordinator)
 **Authority:** Human Director (herdianrony)
 **Next Review:** Director review of PR #1 (Gate 1) — pending; Live Hermes Runtime Integration gate scheduled around Phase 5 / G3
