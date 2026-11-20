@@ -302,6 +302,8 @@ export class HermesEventBridge {
             const retry = parseInt(line.slice(6).trim(), 10);
             if (!isNaN(retry) && retry > 0) {
               currentEvent.retry = retry;
+            } else if (line.slice(6).trim() !== '') {
+              logger.warn({ runId, raw: line }, 'Unparseable retry: value in SSE event, ignoring');
             }
           } else if (line.startsWith(':')) {
             // Comment line - ignore
@@ -500,8 +502,8 @@ export class HermesEventBridge {
         if (parsedEvent.seq !== undefined) {
           pollState.lastSeq = parsedEvent.seq;
         }
-        if (parsedEvent.id !== undefined) {
-          pollState.lastEventId = String(parsedEvent.id);
+        if (parsedEvent.id !== undefined && typeof parsedEvent.id === 'string' && parsedEvent.id.trim() !== '') {
+          pollState.lastEventId = parsedEvent.id.trim();
         }
 
         // Check for terminal event

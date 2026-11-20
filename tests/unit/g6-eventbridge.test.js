@@ -1765,4 +1765,159 @@ describe('G6.1.5 — Reader Cleanup & Decoder Flush Error Integrity', () => {
     expect(bridge.activePolls.has('run_bounded')).toBe(false);
     bridge.stopAll();
   });
+
+  it('event without id does not set lastEventId to undefined', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockResolvedValue({ status: 'processed' })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    const reader = createControllableSSEReader();
+    reader.getReader().releaseLock = vi.fn();
+    global.fetch = createFetchFromReader(reader);
+
+    const processedEvents = [];
+    bridge.registerRunTaskMapping('run_no_id', 'task_no_id');
+    bridge.startPolling('run_no_id', { onEvent: (event) => processedEvents.push(event) });
+
+    // Event with no id field at all
+    reader.push('event: agent.execution.started\ndata: {"task":"no_id"}\n\n');
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Event should still be processed
+    expect(processedEvents.length).toBe(1);
+    // lastEventId should remain null — not "undefined" string
+    const pollState = bridge.activePolls.get('run_no_id');
+    expect(pollState).toBeDefined();
+    expect(pollState.lastEventId).toBeNull();
+    expect(pollState.lastSeq).toBe(-1);
+    bridge.stopAll();
+  });
+
+  it('event with null id does not set lastEventId to null string', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockResolvedValue({ status: 'processed' })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    const reader = createControllableSSEReader();
+    reader.getReader().releaseLock = vi.fn();
+    global.fetch = createFetchFromReader(reader);
+
+    bridge.registerRunTaskMapping('run_null_id', 'task_null_id');
+    bridge.startPolling('run_null_id', { onEvent: () => {} });
+
+    // Event with empty id field
+    reader.push('id: \nevent: agent.execution.started\ndata: {"task":"null_id"}\n\n');
+    reader.close();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // lastEventId should remain null — not "null" or "undefined" string
+    const pollState = bridge.activePolls.get('run_null_id');
+    expect(pollState).toBeDefined();
+    expect(pollState.lastEventId).toBeNull();
+    bridge.stopAll();
+  });
+
+  it('reconnect without checkpoint does not send Last-Event-ID header', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockRejectedValue(new Error('DB connection failed'))
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    global.fetch = vi.fn().mockImplementation((url, options) => {
+      const reader = createControllableSSEReader();
+      reader.push(sseEvent({
+        id: 'evt_nocp',
+        event: 'agent.execution.started',
+        data: { task_id: 'task_nocp' }
+      }));
+      reader.close();
+      return Promise.resolve({
+        ok: true,
+        body: { getReader: () => reader.getReader() }
+      });
+    });
+
+    bridge.registerRunTaskMapping('run_nocp', 'task_nocp');
+    bridge.startPolling('run_nocp', { onEvent: () => {} });
+
+    // Capture pollState before polling loop completes and cleans up activePolls
+    const pollState = bridge.activePolls.get('run_nocp');
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // Checkpoint was never advanced (reconciliation always failed)
+    expect(pollState).toBeDefined();
+    expect(pollState.lastEventId).toBeNull();
+    expect(pollState.lastSeq).toBe(-1);
+    // Since lastEventId is null, Last-Event-ID header cannot be sent
+    // (gated by `if (pollState.lastEventId)` in _fetchAndProcessRunEvents)
+    bridge.stopAll();
+  });
+
+  it('reconnect with valid checkpoint sends Last-Event-ID header', async () => {
+    const mockReconciler = {
+      reconcile: vi.fn().mockResolvedValue({ status: 'processed' })
+    };
+
+    const bridge = new HermesEventBridge({
+      reconciler: mockReconciler,
+      pollInterval: 50,
+      reconciliationBackoffBase: 10,
+      reconciliationBackoffMax: 100
+    });
+
+    const lastEventIdHeaders = [];
+    global.fetch = vi.fn().mockImplementation((url, options) => {
+      lastEventIdHeaders.push(options?.headers?.['Last-Event-ID'] ?? null);
+      const reader = createControllableSSEReader();
+      reader.push(sseEvent({
+        id: 'evt_with_cp',
+        event: 'agent.execution.started',
+        data: { task_id: 'task_with_cp' }
+      }));
+      reader.close();
+      return Promise.resolve({
+        ok: true,
+        body: { getReader: () => reader.getReader() }
+      });
+    });
+
+    bridge.registerRunTaskMapping('run_with_cp', 'task_with_cp');
+    bridge.startPolling('run_with_cp', { onEvent: () => {} });
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Checkpoint was set after successful reconciliation
+    const pollState = bridge.activePolls.get('run_with_cp');
+    expect(pollState).toBeDefined();
+    expect(pollState.lastEventId).toBe('evt_with_cp');
+    // Last-Event-ID header should reflect the checkpoint on fetches after reconciliation
+    expect(lastEventIdHeaders.some(h => h === 'evt_with_cp')).toBe(true);
+    // First fetch should NOT have Last-Event-ID (no checkpoint yet)
+    expect(lastEventIdHeaders[0]).toBeNull();
+    bridge.stopAll();
+  });
 });
