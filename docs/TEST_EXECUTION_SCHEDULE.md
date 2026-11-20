@@ -2,8 +2,10 @@
 
 **Project:** Bangron Virtual Office
 **Acceleration Period:** 10 Working Days (2026-11-20 → 2026-12-04)
-**Schedule Version:** 1.0
+**Schedule Version:** 1.1
 **Timezone:** WIB (UTC+07:00)
+
+> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Day/gate references below use this numbering.
 
 ---
 
@@ -49,7 +51,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 11:00 | Audit log unit tests (new) | `npm test -- tests/unit/audit.test.js` | Backend | All new tests pass |
 | 14:00 | Security intercept unit | `npm test -- tests/unit/security-intercept.test.js` | Security | All new tests pass |
 | 15:00 | Integration: Approval API | `npx playwright test tests/e2e/approval-api.test.js` | QA | API flow verified |
-| 16:00 | **Day 2 Report** | Update roadmap + PR #2 draft | Main Agent | Markdown report |
+| 16:00 | **Day 2 Report** | Update roadmap + PR #3 draft | Main Agent | Markdown report |
 
 ---
 
@@ -61,10 +63,10 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 10:30 | Frontend: Audit log viewer E2E | `npx playwright test tests/e2e/approval-e2e.test.js --grep "Audit"` | Frontend | Filterable, export works |
 | 11:30 | E2E: Full approval flow | `npx playwright test tests/e2e/approval-e2e.test.js` | QA | End-to-end pass |
 | 14:00 | Security review (Phase 4) | Manual + automated | Security | Checklist complete |
-| 15:00 | PR #2 creation + test evidence | `gh pr create` | Main Agent | PR with all test results |
+| 15:00 | PR #3 creation + test evidence | `gh pr create` | Main Agent | PR with all test results |
 | 16:00 | **Day 3 Report** | Update roadmap | Main Agent | Markdown report |
 
-**Day 3 Gate:** PR #2 approved by Director → Phase 4 complete
+**Day 3 Gate:** PR #3 approved by Director → Phase 4 complete
 
 ---
 
@@ -91,10 +93,10 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 14:00 | Frontend: Tasks page E2E | `npx playwright test tests/e2e/task-e2e.test.js --grep "Tasks page"` | Frontend | Kanban, drag-drop, deps |
 | 15:00 | Frontend: Agents page E2E | `npx playwright test tests/e2e/task-e2e.test.js --grep "Agents page"` | Frontend | Live status, follow |
 | 16:00 | E2E: Full task lifecycle | `npx playwright test tests/e2e/task-lifecycle-e2e.test.js` | QA | Task → Hermes → Complete |
-| 17:00 | PR #3 creation | `gh pr create` | Main Agent | PR with test evidence |
+| 17:00 | PR #4 creation | `gh pr create` | Main Agent | PR with test evidence |
 | 17:30 | **Day 5 Report** | Update roadmap | Main Agent | Markdown report |
 
-**Day 5 Gate:** PR #3 approved by Director → Phase 5 complete
+**Day 5 Gate:** PR #4 approved by Director → Phase 5 complete
 
 ---
 
@@ -121,10 +123,10 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 14:00 | Monitoring endpoints | `curl /healthz /readyz /metrics` | DevOps | All 200, Prometheus format |
 | 15:00 | Performance test (k6) | `k6 run load-test.js` | QA | p95 < 200ms, 100 VUs |
 | 16:00 | Production config validation | `npm run config:validate` | Security | All required env, headers |
-| 17:00 | PR #4 creation | `gh pr create` | Main Agent | PR with audit report |
+| 17:00 | PR #5 creation | `gh pr create` | Main Agent | PR with audit report |
 | 17:30 | **Day 7 Report** | Update roadmap | Main Agent | Markdown report |
 
-**Day 7 Gate:** PR #4 approved by Director → Phase 6 complete
+**Day 7 Gate:** PR #5 approved by Director → Phase 6 complete
 
 ---
 
@@ -148,7 +150,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 13:00 | Security regression (staging) | `npx playwright test tests/e2e/security-e2e.test.js` | Security | No auth/RBAC/approval regressions |
 | 14:30 | Load test (staging) | `k6 run load-test-staging.js` | QA | Meets SLAs under load |
 | 15:30 | Director acceptance walkthrough | Manual on staging URL | Director + Main | Sign-off checklist |
-| 16:30 | PR #5 creation | `gh pr create` | Main Agent | PR with staging evidence |
+| 16:30 | PR #6 creation | `gh pr create` | Main Agent | PR with staging evidence |
 | 17:00 | **Day 9 Report** | Update roadmap | Main Agent | Markdown report |
 
 **Day 9 Gate:** Director signs off staging → Phase 7 complete
@@ -163,7 +165,7 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 | 10:30 | Final security review | Secrets rotated, headers, audit log | Security | Signed checklist |
 | 11:30 | Documentation review | `docs/` completeness check | All | All public APIs documented |
 | 13:00 | Release candidate tag | `git tag v1.0.0-rc.1 && git push --tags` | Main Agent | CI passes on tag |
-| 13:30 | PR merge (Director approval) | `gh pr merge` for PRs #1–#5 | Director | All merged to main |
+| 13:30 | PR merge (Director approval) | `gh pr merge` for PRs #1–#6 | Director | All merged to main |
 | 14:30 | Production deploy | `./scripts/deploy.sh production` | DevOps + Director | Authorized, health checks pass |
 | 15:00 | Post-deploy verification | `npx playwright test --project=production --grep "smoke"` | QA | Critical paths work |
 | 15:30 | Monitoring confirmation | Alerts firing, logs flowing | DevOps | Grafana/Prometheus dashboards |
@@ -338,15 +340,15 @@ HERMES_URL=https://hermes-staging.bangron.my.id npx playwright test tests/e2e/he
 |------------|------|--------|
 | Schedule Review | Day 0 (now) | This document + roadmap |
 | Phase 3.2 Gate | Day 1 EOD | PR #1 + test evidence |
-| Phase 4 Gate | Day 3 EOD | PR #2 + test evidence |
-| Phase 5 Gate | Day 5 EOD | PR #3 + test evidence |
-| Phase 6 Gate | Day 7 EOD | PR #4 + audit report |
-| Phase 7 Gate | Day 9 EOD | PR #5 + staging sign-off |
+| Phase 4 Gate | Day 3 EOD | PR #3 + test evidence |
+| Phase 5 Gate | Day 5 EOD | PR #4 + test evidence |
+| Phase 6 Gate | Day 7 EOD | PR #5 + audit report |
+| Phase 7 Gate | Day 9 EOD | PR #6 + staging sign-off |
 | Release Gate | Day 10 13:30 | All PRs merged + deploy auth |
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Owner:** Main Agent (PM/QA Coordinator)
 **Review:** Daily at 17:00 WIB
 **Next Update:** 2026-11-20 17:00 WIB (Day 1 Report)

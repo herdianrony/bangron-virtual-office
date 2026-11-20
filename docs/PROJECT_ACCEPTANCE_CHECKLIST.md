@@ -4,7 +4,7 @@
 **Repository:** https://github.com/herdianrony/bangron-virtual-office
 **Target Release:** v1.0.0
 **Acceptance Authority:** Human Director (herdianrony)
-**Checklist Version:** 1.1
+**Checklist Version:** 1.2
 **Last Updated:** 2026-11-20
 
 ---
@@ -17,16 +17,18 @@ Each gate requires: **implementation + tests passing + Director approval**.
 | Gate | Phase | Description | Status | Evidence Required |
 |------|-------|-------------|--------|-------------------|
 | G1 | 3.2 | Final stabilization & E2E verification | ⏳ | 98 unit/integration + 10 E2E pass — verified (see Gate 1); Director approval + merge pending |
-| G2 | 4 | Director approval workflow & RBAC | ⏳ | PR #2 approved |
-| G3 | 5 | Task management & Hermes synchronization | ⏳ | PR #3 approved |
-| G4 | 6 | Security audit & reliability | ⏳ | PR #4 approved + audit report |
-| G5 | 7 | Deployment rehearsal & integration | ⏳ | PR #5 approved + staging sign-off |
+| G2 | 4 | Director approval workflow & RBAC | ⏳ | PR #3 approved |
+| G3 | 5 | Task management & Hermes synchronization | ⏳ | PR #4 approved |
+| G4 | 6 | Security audit & reliability | ⏳ | PR #5 approved + audit report |
+| G5 | 7 | Deployment rehearsal & integration | ⏳ | PR #6 approved + staging sign-off |
 | G6 | 10 | Final release & production deploy | ⏳ | Production verified + Live Hermes Runtime Integration gate passed |
 
-> **PR numbering note (2026-11-20):** PR #2 is currently the GitHub Actions CI PR
-> (`chore/github-actions-ci`, stacked on PR #1). The "PR #2 … PR #5" references in
-> gates G2–G6 refer to the future phase PRs as originally planned; the Phase 4
-> approval-workflow PR will therefore carry a later number.
+> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2
+> stabilization (`fix/security-hardening` → `main`); PR #2 = GitHub Actions CI
+> (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 approval workflow
+> & RBAC (planned). Subsequent phases continue the numbering: Phase 5 → PR #4,
+> Phase 6 → PR #5, Phase 7 → PR #6. All gate references below use this finalized
+> numbering; the final release merges PRs #1–#6.
 >
 > **Outstanding production-readiness blocker:** Live Hermes Runtime Integration
 > verification (kanban `t_e15f8a03`) must pass before Gate G6. Simulated Hermes
@@ -135,7 +137,7 @@ map 1:1 to the current suite layout.
 - [ ] **4.6** Frontend: Approvals page — real-time queue, approve/reject actions
 - [ ] **4.7** Frontend: Audit log viewer — filterable, export CSV
 - [ ] **4.8** Integration tests: task → high-risk action → approval → execution
-- [ ] **4.9** PR #2 created with tests, security review, acceptance checklist
+- [ ] **4.9** PR #3 created with tests, security review, acceptance checklist
 
 ### Test Evidence Required
 | Test | Command | Expected Result | Actual Result | ✅/❌ |
@@ -155,7 +157,7 @@ map 1:1 to the current suite layout.
 - [ ] Rate limiting on approval endpoints
 
 ### Director Approval
-- [ ] **Director reviews PR #2** with all test evidence
+- [ ] **Director reviews PR #3** with all test evidence
 - [ ] **Director explicitly approves** merge to main
 - [ ] **Merge completed** — Gate 2 ✅ Verified
 
@@ -174,7 +176,7 @@ map 1:1 to the current suite layout.
 - [ ] **5.8** Frontend: Tasks page — Kanban/List, drag-drop, dependency lines
 - [ ] **5.9** Frontend: Agents page — live status, workstation, follow mode
 - [ ] **5.10** Integration tests: Task → Assign → Hermes → Complete (live Hermes)
-- [ ] **5.11** PR #3 created with tests, security review, acceptance checklist
+- [ ] **5.11** PR #4 created with tests, security review, acceptance checklist
 
 ### Test Evidence Required
 | Test | Command | Expected Result | Actual Result | ✅/❌ |
@@ -200,7 +202,7 @@ map 1:1 to the current suite layout.
 - [ ] Rate limit handling (429) with exponential backoff
 
 ### Director Approval
-- [ ] **Director reviews PR #3** with all test evidence
+- [ ] **Director reviews PR #4** with all test evidence
 - [ ] **Director explicitly approves** merge to main
 - [ ] **Merge completed** — Gate 3 ✅ Verified
 
@@ -217,7 +219,7 @@ map 1:1 to the current suite layout.
 - [ ] **6.6** Monitoring endpoints: `/healthz`, `/readyz`, `/metrics` (Prometheus)
 - [ ] **6.7** Performance testing: p95 < 200ms API, 100 concurrent users, WS < 50ms latency
 - [ ] **6.8** Production config validation: all required env, Helmet headers, secure cookies, HSTS
-- [ ] **6.9** PR #4 created with audit report, test evidence, config checklist
+- [ ] **6.9** PR #5 created with audit report, test evidence, config checklist
 
 ### Test Evidence Required
 | Test | Command | Expected Result | Actual Result | ✅/❌ |
@@ -246,7 +248,7 @@ map 1:1 to the current suite layout.
 - [ ] **Webhook Security:** HMAC-SHA256, timestamp validation, replay protection
 
 ### Director Approval
-- [ ] **Director reviews PR #4** with audit report + all test evidence
+- [ ] **Director reviews PR #5** with audit report + all test evidence
 - [ ] **Director explicitly approves** merge to main
 - [ ] **Merge completed** — Gate 4 ✅ Verified
 
@@ -263,7 +265,7 @@ map 1:1 to the current suite layout.
 - [ ] **7.6** Hermes runtime integration testing: real task dispatch → execution → UI update
 - [ ] **7.7** Security regression testing: no auth/RBAC/approval regressions from Phase 6
 - [ ] **7.8** Director acceptance testing: manual walkthrough on staging, sign-off checklist
-- [ ] **7.9** PR #5 created with staging URL, test reports, acceptance sign-off
+- [ ] **7.9** PR #6 created with staging URL, test reports, acceptance sign-off
 
 ### Test Evidence Required
 | Test | Command | Expected Result | Actual Result | ✅/❌ |
@@ -295,7 +297,7 @@ map 1:1 to the current suite layout.
 - [ ] Verify monitoring → healthz/readyz/metrics responding
 
 ### Director Approval
-- [ ] **Director reviews PR #5** with staging URL + all test evidence
+- [ ] **Director reviews PR #6** with staging URL + all test evidence
 - [ ] **Director explicitly approves** merge to main
 - [ ] **Merge completed** — Gate 5 ✅ Verified
 
@@ -314,7 +316,7 @@ map 1:1 to the current suite layout.
 - [ ] **10.2** Final security review: secrets rotated for prod, headers, deps, audit log complete
 - [ ] **10.3** Documentation complete: README, API docs, runbooks, architecture diagrams
 - [ ] **10.4** Release candidate tag: `v1.0.0-rc.1` pushed, CI passes
-- [ ] **10.5** Final PR review & merge: PRs #1–#5 → main, all Director approved, CI green
+- [ ] **10.5** Final PR review & merge: PRs #1–#6 → main, all Director approved, CI green
 - [ ] **10.6** Production deployment: explicit Director authorization, deploy script, health checks
 - [ ] **10.7** Post-deployment verification: smoke tests, monitoring confirmed, logs flowing
 - [ ] **10.8** Project closure: retrospective, lessons learned, skills/memory updated
@@ -401,28 +403,28 @@ PR #1 Merged: __________ (SHA: __________)
 ```
 Director: _________________________  Date: __________
 Signature: _________________________
-PR #2 Merged: __________ (SHA: __________)
+PR #3 Merged: __________ (SHA: __________)
 ```
 
 ### Gate 3 — Phase 5 Complete
 ```
 Director: _________________________  Date: __________
 Signature: _________________________
-PR #3 Merged: __________ (SHA: __________)
+PR #4 Merged: __________ (SHA: __________)
 ```
 
 ### Gate 4 — Phase 6 Complete
 ```
 Director: _________________________  Date: __________
 Signature: _________________________
-PR #4 Merged: __________ (SHA: __________)
+PR #5 Merged: __________ (SHA: __________)
 ```
 
 ### Gate 5 — Phase 7 Complete
 ```
 Director: _________________________  Date: __________
 Signature: _________________________
-PR #5 Merged: __________ (SHA: __________)
+PR #6 Merged: __________ (SHA: __________)
 ```
 
 ### Gate 6 — Final Release Complete
@@ -449,7 +451,7 @@ PROJECT STATUS: ✅ COMPLETE / ❌ INCOMPLETE
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Owner:** Main Agent (PM/QA Coordinator)
 **Authority:** Human Director (herdianrony)
 **Next Review:** Director review of PR #1 (Gate 1) — pending; Live Hermes Runtime Integration gate scheduled around Phase 5 / G3

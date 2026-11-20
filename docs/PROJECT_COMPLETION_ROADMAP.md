@@ -7,6 +7,8 @@
 **Current HEAD:** `f128b3d` (Exclude E2E tests from vitest run)
 **Current PR:** #1 — Security hardening and top-down visual foundation (DRAFT)
 
+> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Task references below use this numbering.
+
 ---
 
 ## Executive Summary
@@ -69,9 +71,9 @@
 | 4.6 | Frontend: Approvals page (queue, details, actions) | 🟠 High | Frontend Engineer | 4.1 | 3h | Real-time updates via WS; Director can approve/reject | `npx playwright test --grep "Approvals"` | ⏳ Planned | — |
 | 4.7 | Frontend: Audit log viewer | 🟢 Medium | Frontend Engineer | 4.5 | 1h | Filterable table; export CSV | `npx playwright test --grep "Audit"` | ⏳ Planned | — |
 | 4.8 | Approval integration tests (API + WS + UI) | 🔴 Critical | QA Automation | 4.1–4.7 | 2h | End-to-end: task → high-risk action → approval → execution | `npx playwright test tests/e2e/approval-e2e.test.js` | ⏳ Planned | — |
-| 4.9 | Commit and create PR #2: Phase 4 Approval Workflow | 🟢 Medium | Main Agent | 4.8 | 15m | PR with tests, security review, acceptance checklist | `gh pr create` | ⏳ Planned | — |
+| 4.9 | Commit and create PR #3: Phase 4 Approval Workflow | 🟢 Medium | Main Agent | 4.8 | 15m | PR with tests, security review, acceptance checklist | `gh pr create` | ⏳ Planned | — |
 
-**Days 2–3 Deliverable:** Director approval workflow complete; PR #2 ready.
+**Days 2–3 Deliverable:** Director approval workflow complete; PR #3 ready.
 
 ---
 
@@ -89,9 +91,9 @@
 | 5.8 | Frontend: Tasks page (Kanban/List, assign, dependencies) | 🟠 High | Frontend Engineer | 5.1, 5.3 | 3h | Drag-drop status; dependency lines; real-time updates | `npx playwright test --grep "Tasks"` | ⏳ Planned | — |
 | 5.9 | Frontend: Agents page (status, workstation, activity) | 🟠 High | Frontend Engineer | 5.2 | 2h | Live avatar states; click for details; follow mode | `npx playwright test --grep "Agents"` | ⏳ Planned | — |
 | 5.10 | Integration tests: Task → Assign → Hermes → Complete | 🔴 Critical | QA Automation | 5.1–5.9 | 2h | Full flow verified against live Hermes | `npx playwright test tests/e2e/task-lifecycle-e2e.test.js` | ⏳ Planned | — |
-| 5.11 | Commit and create PR #3: Phase 5 Task Management | 🟢 Medium | Main Agent | 5.10 | 15m | PR with tests, security review, acceptance checklist | `gh pr create` | ⏳ Planned | — |
+| 5.11 | Commit and create PR #4: Phase 5 Task Management | 🟢 Medium | Main Agent | 5.10 | 15m | PR with tests, security review, acceptance checklist | `gh pr create` | ⏳ Planned | — |
 
-**Days 4–5 Deliverable:** Task management + Hermes sync complete; PR #3 ready.
+**Days 4–5 Deliverable:** Task management + Hermes sync complete; PR #4 ready.
 
 ---
 
@@ -107,9 +109,9 @@
 | 6.6 | Monitoring endpoints (health, readiness, metrics) | 🟢 Medium | DevOps Engineer | Phase 5 | 1h | `/healthz`, `/readyz`, `/metrics` (Prometheus format) | `curl localhost:3002/healthz` | ⏳ Planned | — |
 | 6.7 | Performance testing (load, latency, throughput) | 🟢 Medium | QA Automation | Phase 5 | 2h | p95 < 200ms API; 100 concurrent users; WS < 50ms latency | `k6 run load-test.js` | ⏳ Planned | — |
 | 6.8 | Production config validation (env, secrets, TLS, headers) | 🔴 Critical | Security Engineer | 6.1 | 1h | All required env set; Helmet headers; secure cookies; HSTS | `npm run config:validate` | ⏳ Planned | — |
-| 6.9 | Commit and create PR #4: Phase 6 Security & Reliability | 🟢 Medium | Main Agent | 6.1–6.8 | 15m | PR with audit report, test evidence, config checklist | `gh pr create` | ⏳ Planned | — |
+| 6.9 | Commit and create PR #5: Phase 6 Security & Reliability | 🟢 Medium | Main Agent | 6.1–6.8 | 15m | PR with audit report, test evidence, config checklist | `gh pr create` | ⏳ Planned | — |
 
-**Days 6–7 Deliverable:** Security audit passed; reliability features complete; PR #4 ready.
+**Days 6–7 Deliverable:** Security audit passed; reliability features complete; PR #5 ready.
 
 ---
 
@@ -125,9 +127,9 @@
 | 7.6 | Hermes runtime integration testing (live) | 🔴 Critical | Hermes Integration | 7.1 | 2h | Real task dispatch → Hermes execution → events → UI update | `npx playwright test tests/e2e/hermes-live-e2e.test.js` | ⏳ Planned | — |
 | 7.7 | Security regression testing (auth, RBAC, approval, secrets) | 🟠 High | Security Engineer | 7.4 | 1h | No regressions from Phase 6; penetration test basics | `npx playwright test tests/e2e/security-e2e.test.js` | ⏳ Planned | — |
 | 7.8 | Acceptance testing (Director sign-off on staging) | 🔴 Critical | Main Agent + Director | 7.5, 7.7 | 1h | Director validates all acceptance criteria on staging | Manual walkthrough | ⏳ Planned | — |
-| 7.9 | Commit and create PR #5: Phase 7 Deployment Ready | 🟢 Medium | Main Agent | 7.8 | 15m | PR with staging URL, test reports, acceptance sign-off | `gh pr create` | ⏳ Planned | — |
+| 7.9 | Commit and create PR #6: Phase 7 Deployment Ready | 🟢 Medium | Main Agent | 7.8 | 15m | PR with staging URL, test reports, acceptance sign-off | `gh pr create` | ⏳ Planned | — |
 
-**Days 8–9 Deliverable:** Staging verified; all acceptance criteria met; PR #5 ready.
+**Days 8–9 Deliverable:** Staging verified; all acceptance criteria met; PR #6 ready.
 
 ---
 
@@ -139,7 +141,7 @@
 | 10.2 | Final security review (secrets, headers, deps, audit log) | 🔴 Critical | Security Engineer | 10.1 | 1h | No findings; all secrets rotated for prod; audit log complete | Manual + automated | ⏳ Planned | — |
 | 10.3 | Documentation completion (README, API docs, runbooks) | 🟢 Medium | All | 10.1 | 2h | All public APIs documented; deployment/runbook current | Verify `docs/` completeness | ⏳ Planned | — |
 | 10.4 | Create release candidate tag (`v1.0.0-rc.1`) | 🟢 Medium | Main Agent | 10.2 | 15m | Tag pushed; CI passes; artifacts built | `git tag v1.0.0-rc.1 && git push --tags` | ⏳ Planned | — |
-| 10.5 | Final PR review & merge (PRs #1–#5 → main) | 🔴 Critical | Director + Main | 10.4 | 30m | All PRs approved by Director; merged to main; CI green | `gh pr merge` (per PR) | ⏳ Planned | — |
+| 10.5 | Final PR review & merge (PRs #1–#6 → main) | 🔴 Critical | Director + Main | 10.4 | 30m | All PRs approved by Director; merged to main; CI green | `gh pr merge` (per PR) | ⏳ Planned | — |
 | 10.6 | Production deployment (explicit Director authorization) | 🔴 Critical | DevOps + Director | 10.5 | 1h | Deploy to prod; health checks pass; Director confirms | `./scripts/deploy.sh production` | ⏳ Planned | — |
 | 10.7 | Post-deployment verification (smoke tests, monitoring) | 🟠 High | QA + DevOps | 10.6 | 30m | All critical paths work; alerts configured; logs flowing | `npx playwright test --project=production` | ⏳ Planned | — |
 | 10.8 | Project closure (retrospective, lessons learned) | 🟢 Medium | Main Agent | 10.7 | 30m | Retrospective doc; updated skills/memory; archives | `docs/RETROSPECTIVE.md` | ⏳ Planned | — |
@@ -260,6 +262,6 @@ At end of each working day, update this file and post PR comment:
 
 ---
 
-**Last Updated:** 2026-11-20 03:45 WIB
+**Last Updated:** 2026-11-20 11:44 WIB (PR numbering consistency revision; original plan 2026-11-20 03:45 WIB)
 **Next Review:** End of Day 1 (2026-11-20)
 **Main Agent:** Hermes (Project Manager & QA Coordinator)
