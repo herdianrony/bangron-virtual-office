@@ -78,7 +78,7 @@ export class TaskService {
     }
 
     // Build instruction for Hermes
-    const instruction = `Task: ${task.title}\\n\\nDescription: ${task.description || 'No description provided.'}\\n\\nPriority: ${task.priority}\\nAssigned Agent: ${agent.display_name} (${agent.profile_name})\\n\\nPlease execute this task and provide a summary of the work completed.`;
+    const instruction = `Task: ${task.title}\n\nDescription: ${task.description || 'No description provided.'}\n\nPriority: ${task.priority}\nAssigned Agent: ${agent.display_name} (${agent.profile_name})\n\nPlease execute this task and provide a summary of the work completed.`;
 
     // PERSIST ASSIGNMENT AND QUEUED STATUS FIRST — before dispatch
     // This ensures any fast Hermes event sees the task in DB with correct initial state.
