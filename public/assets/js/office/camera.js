@@ -18,6 +18,10 @@ export class CameraController {
     this.startX = 0;
     this.startY = 0;
 
+    // Time-based lerp state
+    this.lastTime = null;
+    this.lerpSpeed = 6.0; // units per second (smoothness factor)
+
     this.initEvents();
     this.updateTransform();
   }
@@ -113,7 +117,7 @@ export class CameraController {
     this.updateTransform();
   }
 
-  updateFollow(agents) {
+  updateFollow(agents, dt = 1 / 60) {
     const followId = store.state.followAgentId;
     if (!followId) return;
 
@@ -126,9 +130,11 @@ export class CameraController {
       const targetPanX = rect.width / 2 - screenPos.x * this.scale;
       const targetPanY = rect.height / 2 - screenPos.y * this.scale;
 
-      // Smooth lerp
-      this.panX += (targetPanX - this.panX) * 0.1;
-      this.panY += (targetPanY - this.panY) * 0.1;
+      // Time-based lerp: exponential decay independent of frame rate
+      // alpha = 1 - e^(-speed * dt) gives consistent smoothing at any FPS
+      const alpha = 1 - Math.exp(-this.lerpSpeed * dt);
+      this.panX += (targetPanX - this.panX) * alpha;
+      this.panY += (targetPanY - this.panY) * alpha;
       this.updateTransform();
     }
   }

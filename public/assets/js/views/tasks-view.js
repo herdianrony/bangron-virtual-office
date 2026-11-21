@@ -1,9 +1,14 @@
 import { api } from '../core/api.js';
 import { SkeletonLoader } from '../core/skeleton.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { showToast } from '../core/toast.js';
+import { ConfirmDialog } from '../core/confirm-dialog.js';
 
 export class TasksView {
   constructor(container) {
     this.container = container;
+    this.capabilities = [];
+    this.agents = [];
   }
 
   showSkeleton() {
@@ -104,10 +109,19 @@ export class TasksView {
                 </select>
               </div>
               <div>
+                <label class="label text-xs font-semibold text-base-content/80 pb-1">Filter by Capability</label>
+                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-capability-filter" onchange="window.currentTasksView.filterAgentsByCapability()">
+                  <option value="">All Capabilities</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-full">
                 <label class="label text-xs font-semibold text-base-content/80 pb-1">Assign Specialist</label>
-                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-agent">
+                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-agent" id="task-agent-select">
                   <option value="">-- Let Hermes Assign --</option>
                 </select>
+                <span class="text-[11px] text-base-content/40 block mt-1" id="task-agent-cap-hint">Hermes auto-assigns best-matched specialist based on task description and capabilities.</span>
               </div>
             </div>
 
@@ -140,14 +154,44 @@ export class TasksView {
 
   async loadAgentsOptions() {
     try {
-      const data = await api.get('/api/agents');
+      const [agentsData, capabilitiesData] = await Promise.all([
+        api.get('/api/agents'),
+        api.get('/api/capabilities')
+      ]);
+      this.agents = agentsData.instances || [];
+      this.capabilities = capabilitiesData.capabilities || [];
+
       const select = document.getElementById('task-agent');
+      const capFilter = document.getElementById('task-capability-filter');
       if (select) {
         select.innerHTML = '<option value="">-- Let Hermes Assign --</option>' +
-          data.instances.map((i) => `<option value="${i.id}">${i.display_name} (${i.department})</option>`).join('');
+          this.agents.map((i) => `<option value="${i.id}" data-cap="${i.capabilities ? i.capabilities.join(',') : ''}">${i.display_name} (${i.department})</option>`).join('');
+      }
+      if (capFilter) {
+        capFilter.innerHTML = '<option value="">All Capabilities</option>' +
+          this.capabilities.map((c) => `<option value="${c}">${c}</option>`).join('');
       }
     } catch (err) {
-      console.error('Failed to load agents list:', err);
+      console.error('Failed to load agents/capabilities:', err);
+    }
+  }
+
+  filterAgentsByCapability() {
+    const capFilter = document.getElementById('task-capability-filter');
+    const agentSelect = document.getElementById('task-agent');
+    const hint = document.getElementById('task-agent-cap-hint');
+    if (!capFilter || !agentSelect) return;
+
+    const selectedCap = capFilter.value;
+    agentSelect.innerHTML = '<option value="">-- Let Hermes Assign --</option>' +
+      this.agents
+        .filter((i) => !selectedCap || (i.capabilities && i.capabilities.includes(selectedCap)))
+        .map((i) => `<option value="${i.id}" data-cap="${i.capabilities ? i.capabilities.join(',') : ''}">${i.display_name} (${i.department})</option>`).join('');
+
+    if (hint) {
+      hint.innerText = selectedCap
+        ? \`Showing agents with capability: \${selectedCap}\`
+        : 'Hermes auto-assigns best-matched specialist based on task description and capabilities.';
     }
   }
 
@@ -162,7 +206,14 @@ export class TasksView {
         : tasks.filter((t) => t.status === statusFilter);
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-base-content/50 py-6">No tasks found for current filter.</td></tr>`;
+        const container = document.getElementById('tasks-table-body').parentElement;
+        EmptyState.show(container, {
+          icon: 'fi fi-rr-list',
+          title: 'Tidak ada task',
+          description: statusFilter === 'all' ? 'Tidak ada task yang tersedia saat ini.' : \`Tidak ada task dengan status: \${statusFilter}\`,
+          actionLabel: 'Buat Task Baru',
+          actionOnClick: () => { document.getElementById('btn-create-task')?.click(); }
+        });
         return;
       }
 
@@ -189,7 +240,7 @@ export class TasksView {
               </span>
             </td>
             <td>
-              <span class="badge badge-xs font-medium ${t.status === 'running' ? 'badge-primary' : t.status === 'waiting' ? 'badge-warning' : t.status === 'completed' ? 'badge-success' : t.status === 'failed' ? 'badge-error' : 'badge-ghost'}">
+              <span class="badge badge-xs font-medium ${t.status === 'running' ? 'badge-primary' : t.status === 'waiting' ? 'badge-warning' : t.status === 'completed' ? 'badge-success' : t.status === 'failed' ? 'badge-error' : t.status === 'cancelled' ? 'badge-neutral' : t.status === 'on_hold' ? 'badge-info' : t.status === 'planning' ? 'badge-secondary' : 'badge-ghost'}">
                 ${t.status}
               </span>
             </td>
@@ -261,10 +312,10 @@ export class TasksView {
         });
 
         modal?.close();
-        alert('Task created successfully!');
+        showToast('success', 'Task Created!', 'Operational task dispatched to Hermes pipeline.');
         await this.loadTasks();
       } catch (err) {
-        alert('Failed to create task: ' + err.message);
+        showToast('error', 'Task Failed', err.message);
       }
     });
 
@@ -280,10 +331,24 @@ export class TasksView {
       const cancelBtn = e.target.closest('.btn-cancel');
       if (cancelBtn) {
         const id = cancelBtn.dataset.id;
-        if (confirm('Are you sure you want to cancel this task?')) {
-          await api.post(`/api/tasks/${id}/cancel`, { reason: 'Cancelled by Director from task board' });
-          await this.loadTasks();
-        }
+        const confirmed = await ConfirmDialog.ask({
+          title: 'Cancel Task',
+          message: 'Apakah Anda yakin ingin membatalkan task ini? Tindakan tidak dapat dibatalkan.',
+          confirmLabel: 'Ya, Batalkan Task',
+          cancelLabel: 'Batal',
+          confirmType: 'error',
+          onConfirm: async () => {
+            await api.post(`/api/tasks/${id}/cancel`, { reason: 'Cancelled by Director from task board' });
+            await this.loadTasks();
+            showToast('warning', 'Task Dibatalkan', 'Task telah dibatalkan oleh Director.');
+          }
+        });
+      }
+
+      // Retry works for failed AND cancelled tasks
+      const retryBtn2 = e.target.closest('.btn-retry');
+      if (retryBtn2 && !retryBtn2.closest('.btn-retry')) {
+        // handled above
       }
     });
   }

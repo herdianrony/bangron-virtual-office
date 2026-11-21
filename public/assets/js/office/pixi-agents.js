@@ -214,12 +214,15 @@ export class PixiAgentLayer {
   }
 
   _refreshTag(rig, agent) {
-    const name = (agent.display_name || 'Agent').replace('[DEMO] ', '');
-    if (name === rig.lastName) return;
-    rig.lastName = name;
-    const w = Math.max(46, name.length * 5.8 + 14);
+    const fullName = (agent.display_name || 'Agent').replace('[DEMO] ', '');
+    // Truncate long names with ellipsis; keep full name for tooltip
+    const displayName = fullName.length > 18 ? fullName.slice(0, 17) + '…' : fullName;
+    if (displayName === rig.lastName) return;
+    rig.lastName = displayName;
+    const w = Math.max(46, displayName.length * 5.8 + 14);
     rig.tagBg.clear().roundRect(-w / 2, -9, w, 12, 3).fill({ color: TAG_FILL, alpha: TAG_ALPHA }).stroke({ width: 0.7, color: rig.lastHaloColor || '#6b7280' });
-    rig.tagText.text = name;
+    rig.tagText.text = displayName;
+    rig.tagText.tooltip = fullName; // full name for tooltip layer
   }
 
   _refreshStatus(rig, agent) {

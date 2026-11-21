@@ -165,7 +165,7 @@ export class MovementEngine {
     }
 
     if (this.onUpdateCallback) {
-      this.onUpdateCallback(Array.from(this.agents.values()));
+      this.onUpdateCallback(Array.from(this.agents.values()), deltaSec);
     }
 
     requestAnimationFrame((t) => this.tick(t));

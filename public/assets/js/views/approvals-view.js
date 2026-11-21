@@ -1,5 +1,8 @@
 import { api } from '../core/api.js';
 import { SkeletonLoader } from '../core/skeleton.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { ConfirmDialog } from '../core/confirm-dialog.js';
+import { showToast } from '../core/toast.js';
 
 export class ApprovalsView {
   constructor(container) {
@@ -130,12 +133,12 @@ export class ApprovalsView {
                 </div>
               </div>
 
-              <!-- Action Payload Collapse Accordion -->
-              <div tabindex="0" class="collapse collapse-arrow bg-base-300/40 border border-base-content/10 rounded-lg text-xs">
-                <div class="collapse-title font-semibold text-base-content/80 py-2 min-h-0 text-xs">
+              <!-- Action Payload Collapse Accordion (Keyboard Accessible) -->
+              <div tabindex="0" role="button" aria-expanded="false" aria-controls="payload-${item.id}" class="collapse collapse-arrow bg-base-300/40 border border-base-content/10 rounded-lg text-xs" data-accordion-id="${item.id}">
+                <div class="collapse-title font-semibold text-base-content/80 py-2 min-h-0 text-xs cursor-pointer">
                   Inspect Parameter Payload & Command Spec
                 </div>
-                <div class="collapse-content">
+                <div class="collapse-content" id="payload-${item.id}" role="region">
                   <pre class="bg-base-300 p-3 rounded-lg text-[11px] font-mono text-primary overflow-x-auto border border-base-content/10 mt-1">${JSON.stringify(payloadObj, null, 2)}</pre>
                 </div>
               </div>
@@ -197,17 +200,41 @@ export class ApprovalsView {
       const approveBtn = e.target.closest('.btn-approve');
       if (approveBtn) {
         const id = approveBtn.dataset.id;
-        const notes = document.getElementById(`review-notes-${id}`)?.value || 'Approved by Director via console';
-        await api.post(`/api/approvals/${id}/approve`, { notes });
-        await this.loadApprovals('pending');
+        const notesInput = document.getElementById(`review-notes-${id}`);
+        const notes = notesInput?.value || 'Approved by Director via console';
+
+        const confirmed = await ConfirmDialog.ask({
+          title: 'Authorize Execution',
+          message: 'Apakah Anda yakin ingin mengizinkan eksekusi task ini? Pastikan semua parameter sudah dicek.',
+          confirmLabel: 'Ya, Izinkan Eksekusi',
+          cancelLabel: 'Batal',
+          confirmType: 'success',
+          onConfirm: async () => {
+            await api.post(`/api/approvals/${id}/approve`, { notes });
+            await this.loadApprovals('pending');
+            showToast('success', 'Persetujuan Diberikan', 'Task telah diotorisasi untuk dieksekusi.');
+          }
+        });
       }
 
       const rejectBtn = e.target.closest('.btn-reject');
       if (rejectBtn) {
         const id = rejectBtn.dataset.id;
-        const notes = document.getElementById(`review-notes-${id}`)?.value || 'Rejected by Director via console';
-        await api.post(`/api/approvals/${id}/reject`, { notes });
-        await this.loadApprovals('pending');
+        const notesInput = document.getElementById(`review-notes-${id}`);
+        const notes = notesInput?.value || 'Rejected by Director via console';
+
+        const confirmed = await ConfirmDialog.ask({
+          title: 'Reject Approval',
+          message: 'Apakah Anda yakin ingin menolak persetujuan ini? Tindakan akan mencegah eksekusi task terkait.',
+          confirmLabel: 'Ya, Tolak Persetujuan',
+          cancelLabel: 'Batal',
+          confirmType: 'error',
+          onConfirm: async () => {
+            await api.post(`/api/approvals/${id}/reject`, { notes });
+            await this.loadApprovals('pending');
+            showToast('warning', 'Persetujuan Ditolak', 'Approval telah ditolak oleh Director.');
+          }
+        });
       }
     });
   }

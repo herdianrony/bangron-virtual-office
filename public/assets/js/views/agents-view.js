@@ -1,5 +1,7 @@
 import { api } from '../core/api.js';
 import { SkeletonLoader } from '../core/skeleton.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { showToast } from '../core/toast.js';
 
 export class AgentsView {
   constructor(container) {
@@ -134,7 +136,7 @@ export class AgentsView {
   async loadAgents(filterDept = 'all') {
     try {
       const data = await api.get('/api/agents');
-      const { instances } = data;
+      const { instances } = agentsData;
       const grid = document.getElementById('agents-grid');
       if (!grid) return;
 
