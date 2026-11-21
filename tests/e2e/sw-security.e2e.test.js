@@ -39,7 +39,7 @@ test.describe('Service Worker API cache security', () => {
   });
 
   test('logout triggers SW API cache clear message', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('#/login');
     await page.waitForSelector('#login-form', { timeout: 15000 });
 
     await page.fill('#login-username', DIRECTOR_EMAIL);

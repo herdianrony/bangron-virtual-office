@@ -13,7 +13,7 @@ const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL;
 const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD;
 
 async function loginAsDirector(page) {
-  await page.goto('/login');
+  await page.goto('#/login');
   await page.waitForSelector('#login-form', { timeout: 15000 });
   await page.fill('#login-username', DIRECTOR_EMAIL);
   await page.fill('#login-password', DIRECTOR_PASSWORD);
