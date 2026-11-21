@@ -12,9 +12,16 @@ dotenv.config();
 const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL;
 const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD;
 
-async function loginAsDirector(page) {
-  await page.goto('#/login');
+async function goToLogin(page) {
+  await page.goto('/');
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => { window.location.hash = '#/login'; });
+  await page.waitForTimeout(1000);
   await page.waitForSelector('#login-form', { timeout: 15000 });
+}
+
+async function loginAsDirector(page) {
+  await goToLogin(page);
   await page.fill('#login-username', DIRECTOR_EMAIL);
   await page.fill('#login-password', DIRECTOR_PASSWORD);
   await page.click('#login-submit-btn');
