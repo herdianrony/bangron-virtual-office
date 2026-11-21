@@ -12,20 +12,28 @@ dotenv.config();
 const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL;
 const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD;
 
-async function goToLogin(page) {
-  await page.goto('/');
-  await page.waitForTimeout(1000);
-  await page.evaluate(() => { window.location.hash = '#/login'; });
-  await page.waitForTimeout(1000);
-  await page.waitForSelector('#login-form', { timeout: 15000 });
-}
-
 async function loginAsDirector(page) {
-  await goToLogin(page);
-  await page.fill('#login-username', DIRECTOR_EMAIL);
-  await page.fill('#login-password', DIRECTOR_PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForFunction(() => Boolean(window.store?.state?.user), null, { timeout: 15000 });
+  // Navigate to office first to initialize SPA
+  await page.goto('/office');
+  await page.waitForTimeout(2000);
+
+  // Attempt login via direct API call
+  const loginRes = await page.request.post('/api/auth/login', {
+    data: { email: DIRECTOR_EMAIL, password: DIRECTOR_PASSWORD },
+  });
+
+  if (!loginRes.ok()) {
+    throw new Error(`Login API failed: ${loginRes.status()}`);
+  }
+
+  // Reload page to pick up session cookie
+  await page.reload();
+  await page.waitForTimeout(2000);
+
+  const isAuthenticated = await page.evaluate(() => Boolean(window.store?.state?.user));
+  if (!isAuthenticated) {
+    throw new Error('Login did not set session');
+  }
 }
 
 async function createTestTasks(page, count = 3) {
