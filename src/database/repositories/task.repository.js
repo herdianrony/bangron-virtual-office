@@ -1,4 +1,5 @@
 import { generateId } from '../../utils/crypto.js';
+import logger from '../../utils/logger.js';
 
 export class TaskRepository {
   constructor(db) {
@@ -109,6 +110,17 @@ export class TaskRepository {
 
   updateTaskStatus(id, status, resultSummary = null) {
     const now = new Date().toISOString();
+    const current = this.getTaskById(id);
+    if (!current) throw new Error('Task not found');
+    // Status terminal (completed/failed/cancelled) tidak boleh ditimpa oleh
+    // event lama yang tiba terlambat (stale event) — menjaga kebenaran
+    // status sebagai sumber kebenaran di backend.
+    const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
+    if (TERMINAL_STATUSES.includes(current.status) && !TERMINAL_STATUSES.includes(status)) {
+      logger.warn({ taskId: id, from: current.status, to: status }, 'Terminal status cannot be overwritten by stale event; ignored');
+      return current;
+    }
+
     let startedAtClause = '';
     let completedAtClause = '';
     const params = [status];
