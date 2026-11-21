@@ -111,18 +111,35 @@ describe('Express session cookie behavior', () => {
     expect(me.body.data.csrfToken).toBe(res.body.data.csrfToken);
   });
 
-  it('rejects an UNSIGNED session cookie (the historical bug)', async () => {
+  it('treats an UNSIGNED session cookie as anonymous (the historical bug stays fixed)', async () => {
     const res = await login();
     const signed = cookieValue(sessionCookieFrom(res)[0]);
     const rawSid = signed.slice(2).split('.')[0]; // strip s: and signature
-    const me = await request(app).get('/api/auth/me').set('Cookie', `bvo_session=${rawSid}`);
-    expect(me.status).toBe(401);
-    expect(me.body.error.code).toBe('UNAUTHENTICATED');
+    const cookie = `bvo_session=${rawSid}`;
+
+    // /me boleh 200 untuk tamu, tapi TIDAK boleh mengaku terautentikasi.
+    const me = await request(app).get('/api/auth/me').set('Cookie', cookie);
+    expect(me.status).toBe(200);
+    expect(me.body.success).toBe(true);
+    expect(me.body.data.isAuthenticated).toBe(false);
+    expect(me.body.data.user).toBeNull();
+
+    // Cookie tak bertanda tidak boleh membuka endpoint terproteksi.
+    const protectedRes = await request(app).get('/api/tasks').set('Cookie', cookie);
+    expect(protectedRes.status).toBe(401);
+    expect(protectedRes.body.error.code).toBe('UNAUTHENTICATED');
   });
 
-  it('rejects requests without a session cookie', async () => {
+  it('answers anonymous /me with 200 isAuthenticated=false (no boot 401 spam)', async () => {
     const me = await request(app).get('/api/auth/me');
-    expect(me.status).toBe(401);
+    expect(me.status).toBe(200);
+    expect(me.body.success).toBe(true);
+    expect(me.body.data.isAuthenticated).toBe(false);
+    expect(me.body.data.user).toBeNull();
+
+    const protectedRes = await request(app).get('/api/tasks');
+    expect(protectedRes.status).toBe(401);
+    expect(protectedRes.body.error.code).toBe('UNAUTHENTICATED');
   });
 
   it('regenerates the session on login (session fixation protection)', async () => {
@@ -151,7 +168,13 @@ describe('Express session cookie behavior', () => {
     expect(cleared[0]).toMatch(/Expires=Thu, 01 Jan 1970/);
 
     const me = await request(app).get('/api/auth/me').set('Cookie', cookie);
-    expect(me.status).toBe(401);
+    expect(me.status).toBe(200);
+    expect(me.body.data.isAuthenticated).toBe(false);
+    expect(me.body.data.user).toBeNull();
+
+    // Sesi yang sudah dihancurkan tidak boleh membuka endpoint terproteksi.
+    const protectedRes = await request(app).get('/api/tasks').set('Cookie', cookie);
+    expect(protectedRes.status).toBe(401);
   });
 });
 
