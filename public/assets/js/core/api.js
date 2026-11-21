@@ -14,7 +14,14 @@ export class ApiClient {
       const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
       if (!res.ok) return false;
       const json = await res.json();
-      return !!(json && json.success && json.data);
+      if (!json || !json.success || !json.data) return false;
+      // Backend mengembalikan 200 { user: null, isAuthenticated: false } untuk
+      // tamu. Jangan anggap tamu punya sesi hanya karena json.data truthy.
+      if (typeof json.data.isAuthenticated === 'boolean') {
+        return json.data.isAuthenticated;
+      }
+      // Kompatibel dengan payload lama ({ user } tanpa isAuthenticated).
+      return !!json.data.user;
     } catch (err) {
       return false;
     }

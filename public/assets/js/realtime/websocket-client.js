@@ -9,6 +9,15 @@ export class RealtimeClient {
   }
 
   connect() {
+    // Tamu (belum terautentikasi) tidak boleh membuka koneksi WS: server
+    // menolak dengan close code 4401 dan klien akan menjadwalkan reconnect
+    // berulang tanpa henti. Setelah login, login-view memuat ulang halaman
+    // sehingga store.state.user sudah terisi sebelum connect() dipanggil.
+    if (!store.state.user) {
+      console.log('[Realtime] Skip: belum terautentikasi.');
+      return;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -33,8 +42,22 @@ export class RealtimeClient {
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
         store.setState({ wsConnected: false });
+        // 4401 = server menolak koneksi karena autentikasi (tamu/sesi habis).
+        // Reconnect hanya akan menghasilkan penolakan yang sama; hentikan.
+        if (event.code === 4401) {
+          console.warn('[Realtime] 4401: koneksi ditolak server, reconnect dihentikan.');
+          store.setState({
+            runtimeStatus: {
+              connected: false,
+              text: 'Unauthorized',
+              reason: 'ws_unauthorized',
+              timestamp: new Date().toISOString()
+            }
+          });
+          return;
+        }
         this.scheduleReconnect();
       };
 

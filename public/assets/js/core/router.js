@@ -1,3 +1,18 @@
+// Server mengirim index.html untuk path UI ini (appRoutes di src/app.js),
+// tetapi Router hanya membaca location.hash dan default ke #/office — jadi
+// membuka /login langsung menampilkan Office. Petakan path URL ke hash route.
+const PATH_ROUTES = {
+  '/office': '#/office',
+  '/dashboard': '#/dashboard',
+  '/agents': '#/agents',
+  '/tasks': '#/tasks',
+  '/projects': '#/projects',
+  '/activities': '#/activities',
+  '/approvals': '#/approvals',
+  '/settings': '#/settings',
+  '/login': '#/login'
+};
+
 export class Router {
   constructor(routes, defaultRoute = '#/office') {
     this.routes = routes;
@@ -8,11 +23,11 @@ export class Router {
   }
 
   init() {
-    if (!window.location.hash) {
-      window.location.hash = this.defaultRoute;
-    } else {
+    if (window.location.hash) {
       this.handleRoute();
+      return;
     }
+    window.location.hash = PATH_ROUTES[window.location.pathname] || this.defaultRoute;
   }
 
   handleRoute() {
