@@ -3,12 +3,16 @@ import { SkeletonLoader } from '../core/skeleton.js';
 import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
 import { showToast } from '../core/toast.js';
 import { ConfirmDialog } from '../core/confirm-dialog.js';
+import { BulkActionManager } from '../core/bulk-action.js';
+import { VirtualScroll } from '../core/virtual-scroll.js';
 
 export class TasksView {
   constructor(container) {
     this.container = container;
     this.capabilities = [];
     this.agents = [];
+    this.bulkManager = null;
+    this.virtualScroll = null;
   }
 
   showSkeleton() {
@@ -59,6 +63,7 @@ export class TasksView {
             <table class="table table-zebra table-sm w-full text-xs">
               <thead>
                 <tr class="bg-base-300/50 text-base-content/70 border-b border-base-content/10">
+                  <th class="w-8"><input type="checkbox" id="bulk-select-all" class="bulk-checkbox bulk-select-all checkbox checkbox-sm checkbox-primary" /></th>
                   <th>Task Title</th>
                   <th>Type / Subtasks</th>
                   <th>Assigned Specialist</th>
@@ -220,7 +225,10 @@ export class TasksView {
       tbody.innerHTML = filtered.map((t) => {
         const isParent = !t.parent_task_id && t.subtask_count > 0;
         return `
-          <tr class="hover:bg-base-300/40">
+          <tr class="hover:bg-base-300/40 bulk-select-item">
+            <td class="w-8">
+              <input type="checkbox" class="bulk-checkbox checkbox checkbox-sm checkbox-primary" data-id="${t.id}" />
+            </td>
             <td>
               <div class="font-bold text-base-content flex items-center gap-1.5">
                 ${t.parent_task_id ? '<span class="text-info font-mono">↳</span>' : ''}
@@ -271,6 +279,64 @@ export class TasksView {
     } catch (err) {
       console.error('Failed to load tasks:', err);
     }
+
+    // Initialize virtual scroll for large lists (100+ items)
+    if (!this.virtualScroll && filtered.length > 50) {
+      const tbody = document.getElementById('tasks-table-body');
+      if (tbody) {
+        this.virtualScroll = new VirtualScroll({
+          container: tbody.parentElement,
+          itemHeight: 52,
+          data: filtered,
+          renderItem: (task, index) => this.renderTaskRow(task)
+        });
+      }
+    }
+  }
+
+  renderTaskRow(task, index) {
+    const isParent = !task.parent_task_id && task.subtask_count > 0;
+    return \`
+      <tr class="hover:bg-base-300/40 bulk-select-item">
+        <td class="w-8">
+          <input type="checkbox" class="bulk-checkbox checkbox checkbox-sm checkbox-primary" data-id="\${task.id}" />
+        </td>
+        <td>
+          <div class="font-bold text-base-content flex items-center gap-1.5">
+            \${task.parent_task_id ? '<span class="text-info font-mono">↳</span>' : ''}
+            \${task.title}
+          </div>
+          <div class="text-[11px] text-base-content/60 mt-0.5 truncate max-w-xs">\${task.description || ''}</div>
+        </td>
+        <td>
+          \${isParent ? \`<span class="badge badge-info badge-xs font-mono font-semibold">\${task.subtasks_completed_count}/\${task.subtask_count} subtasks</span>\` : '<span class="text-base-content/40 text-[11px]">Single Task</span>'}
+        </td>
+        <td>
+          \${task.assigned_agent_name ? \`<span class="badge badge-neutral badge-sm">\${task.assigned_agent_name}</span>\` : '<span class="text-base-content/40 italic">Unassigned</span>'}
+        </td>
+        <td>
+          <span class="badge badge-xs font-semibold \${task.priority === 'critical' ? 'badge-error' : task.priority === 'high' ? 'badge-warning' : 'badge-ghost'}">
+            \${task.priority}
+          </span>
+        </td>
+        <td>
+          <span class="badge badge-xs font-medium \${task.status === 'running' ? 'badge-primary' : task.status === 'waiting' ? 'badge-warning' : task.status === 'completed' ? 'badge-success' : task.status === 'failed' ? 'badge-error' : task.status === 'cancelled' ? 'badge-neutral' : task.status === 'on_hold' ? 'badge-info' : task.status === 'planning' ? 'badge-secondary' : 'badge-ghost'}">
+            \${task.status}
+          </span>
+        </td>
+        <td>
+          <div class="text-xs text-base-content/80">
+            \${task.result_summary || (task.status === 'running' ? '<span class="text-info flex items-center gap-1"><span class="loading loading-spinner loading-xs"></span> Executing step...</span>' : '-')}
+          </div>
+        </td>
+        <td>
+          <div class="flex items-center gap-1.5">
+            \${task.status === 'failed' || task.status === 'cancelled' ? \`<button class="btn btn-ghost btn-xs text-warning hover:bg-warning/10 btn-retry gap-1" data-id="\${task.id}" title="Retry Task"><i class="fi fi-rr-refresh text-xs"></i><span>Retry</span></button>\` : ''}
+            \${task.status === 'running' || task.status === 'waiting' || task.status === 'pending' ? \`<button class="btn btn-ghost btn-xs text-error hover:bg-error/10 btn-cancel gap-1" data-id="\${task.id}" title="Cancel Task"><i class="fi fi-rr-cross-circle text-xs"></i><span>Cancel</span></button>\` : ''}
+          </div>
+        </td>
+      </tr>
+    \`;
   }
 
   initEvents() {
@@ -319,6 +385,16 @@ export class TasksView {
       }
     });
 
+    // Bulk Action Manager
+    this.bulkManager = new BulkActionManager({
+      container: this.container,
+      onBulkAction: (ids) => [
+        { id: 'bulk-cancel', label: 'Batalkan Terpilih', icon: 'fi fi-rr-cross-small', type: 'error', handler: (selIds) => this.bulkCancel(selIds) },
+        { id: 'bulk-retry', label: 'Coba Lagi Semua', icon: 'fi fi-rr-refresh', type: 'warning', handler: (selIds) => this.bulkRetry(selIds) }
+      ]
+    });
+    this.bulkManager.init(document.getElementById('tasks-table-body'));
+
     // Table actions (retry, cancel)
     this.container.addEventListener('click', async (e) => {
       const retryBtn = e.target.closest('.btn-retry');
@@ -353,7 +429,30 @@ export class TasksView {
     });
   }
 
-  destroy() {}
+  async bulkCancel(ids) {
+    const confirmed = await ConfirmDialog.ask({
+      title: 'Batalkan Beberapa Task',
+      message: `Yakin membatalkan ${ids.length} task yang dipilih? Tindakan tidak dapat diurungkan.`,
+      confirmLabel: 'Ya, Batalkan Semua',
+      cancelLabel: 'Batal',
+      confirmType: 'error',
+      onConfirm: async () => {
+        await Promise.all(ids.map((id) => api.post(`/api/tasks/${id}/cancel`, { reason: 'Bulk cancel by Director' })));
+        await this.loadTasks();
+        showToast('warning', 'Task Dibatalkan', `${ids.length} task telah dibatalkan.`);
+      }
+    });
+  }
+
+  async bulkRetry(ids) {
+    await Promise.all(ids.map((id) => api.post(`/api/tasks/${id}/retry`)));
+    await this.loadTasks();
+    showToast('info', 'Task Diretry', `${ids.length} task dikirim ulang untuk dieksekusi.`);
+  }
+
+  destroy() {
+    this.bulkManager?.destroy();
+  }
 }
 
 export default TasksView;

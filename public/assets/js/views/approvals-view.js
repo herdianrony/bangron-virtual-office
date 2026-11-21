@@ -3,10 +3,12 @@ import { SkeletonLoader } from '../core/skeleton.js';
 import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
 import { ConfirmDialog } from '../core/confirm-dialog.js';
 import { showToast } from '../core/toast.js';
+import { approvalEscalationTimer } from '../core/approval-escalation.js';
 
 export class ApprovalsView {
   constructor(container) {
     this.container = container;
+    this.escalationTimer = approvalEscalationTimer;
   }
 
   showSkeleton() {
@@ -54,6 +56,9 @@ export class ApprovalsView {
 
     this.initEvents();
     await this.loadApprovals('pending');
+    this.escalationTimer.updateApprovals(this.currentApprovals || []);
+    this.escalationTimer.onAutoReject = (id, title) => this.handleAutoReject(id, title);
+    this.escalationTimer.start();
   }
 
   async loadApprovals(filterStatus = 'pending') {
@@ -131,6 +136,9 @@ export class ApprovalsView {
                   <span class="text-base-content/60 block text-[11px]">Timestamp</span>
                   <span class="text-base-content/60 font-mono text-[11px] block">${item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span>
                 </div>
+                <div class="pt-1">
+                  <span class="text-[10px] text-warning/80 block font-mono">⏱️ Escalasi: auto-reject dalam 24 jam</span>
+                </div>
               </div>
 
               <!-- Action Payload Collapse Accordion (Keyboard Accessible) -->
@@ -167,8 +175,22 @@ export class ApprovalsView {
           </div>
         `;
       }).join('');
+      this.currentApprovals = items;
+      this.escalationTimer.updateApprovals(items);
     } catch (err) {
       console.error('Failed to load approvals:', err);
+    }
+  }
+
+  async handleAutoReject(id, title) {
+    try {
+      await api.post(`/api/approvals/${id}/reject`, { 
+        notes: 'Auto-rejected: approval expired after 24h escalation timer' 
+      });
+      await this.loadApprovals('pending');
+      showToast('warning', 'Auto-Reject (Escalation)', `"${title}" ditolak otomatis setelah melewati batas waktu 24 jam.`);
+    } catch (err) {
+      console.error('Auto-reject failed:', err);
     }
   }
 
@@ -239,7 +261,9 @@ export class ApprovalsView {
     });
   }
 
-  destroy() {}
+  destroy() {
+    this.escalationTimer.stop();
+  }
 }
 
 export default ApprovalsView;

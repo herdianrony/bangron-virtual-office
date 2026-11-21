@@ -1,6 +1,8 @@
 import { api } from './core/api.js';
 import { store } from './core/store.js';
 import { resolveRuntimeIndicator } from './core/runtime-indicator.js';
+import { commandPalette } from './core/command-palette.js';
+import { Accessibility } from './core/accessibility.js';
 import Router from './core/router.js';
 import { realtimeClient } from './realtime/websocket-client.js';
 import { toast } from './core/toast.js';
@@ -30,6 +32,19 @@ class App {
     // tests can assert authoritative frontend state (runtimeStatus, agents).
     // Read-only by convention; the app never reads window.store.
     window.store = store;
+
+    // 0. Register Service Worker (PWA offline support)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((reg) => console.log('[SW] Registered:', reg.scope))
+        .catch((err) => console.warn('[SW] Registration failed:', err));
+    }
+
+    // 0b. Initialize Theme Manager (system detection + override)
+    import('../core/theme-manager.js').then(({ themeManager }) => {
+      themeManager.init();
+      window.themeManager = themeManager;
+    });
 
     // 0. Initialize DaisyUI Theme Switcher
     this.initThemeController();
@@ -118,6 +133,26 @@ class App {
     // setState({csrfToken}) terjadi sebelum subscribe), jadi render sekali di
     // sini agar indikator tidak tertinggal di default statis "Live Realtime".
     renderRuntimeIndicator();
+
+    // Command Palette - register available commands
+    const user = store.state.user;
+    const cmds = [
+      { id: 'nav-office', label: 'Office View', description: 'Buka tampilan ruang kerja virtual', icon: 'O', shortcut: '#/office', action: () => { window.location.hash = '#/office'; commandPalette.close(); } },
+      { id: 'nav-dashboard', label: 'Dashboard', description: 'Ringkasan statistik dan aktivitas', icon: 'D', shortcut: '#/dashboard', action: () => { window.location.hash = '#/dashboard'; commandPalette.close(); } },
+      { id: 'nav-tasks', label: 'Task Board', description: 'Kelola task multi-agent', icon: 'T', shortcut: '#/tasks', action: () => { window.location.hash = '#/tasks'; commandPalette.close(); } },
+      { id: 'nav-agents', label: 'Agents', description: 'Profile dan status agen', icon: 'A', shortcut: '#/agents', action: () => { window.location.hash = '#/agents'; commandPalette.close(); } },
+      { id: 'nav-approvals', label: 'Approvals', description: 'Persetujuan task tertunda', icon: 'P', shortcut: '#/approvals', action: () => { window.location.hash = '#/approvals'; commandPalette.close(); } },
+      { id: 'nav-settings', label: 'Settings', description: 'Konfigurasi sistem', icon: 'S', shortcut: '#/settings', action: () => { window.location.hash = '#/settings'; commandPalette.close(); } },
+      { id: 'create-task', label: 'Create New Task', description: 'Buat task baru untuk agen', icon: '+' , shortcut: 'Ctrl+N', action: () => { document.getElementById('btn-create-task')?.click(); commandPalette.close(); } },
+      { id: 'toggle-theme', label: 'Toggle Theme', description: 'Ganti tema gelap/terang', icon: '🌓', shortcut: '', action: () => { if (window.themeManager) window.themeManager.toggleTheme(); commandPalette.close(); } },
+      { id: 'logout', label: 'Logout', description: 'Keluar dari sesi', icon: '🚪', shortcut: '', action: () => { document.getElementById('nav-logout-btn')?.click(); commandPalette.close(); } }
+    ];
+    commandPalette.register(cmds);
+    window.commandPalette = commandPalette;
+
+    // Accessibility: skip link, screen reader regions
+    Accessibility.injectSkipLink();
+    window.Accessibility = Accessibility;
   }
 
   setupWsOfflineBanner() {
