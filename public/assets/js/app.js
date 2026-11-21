@@ -103,6 +103,12 @@ class App {
       try {
         await api.post('/api/auth/logout');
         store.setState({ user: null });
+
+        // Clear Service Worker API cache to prevent cross-account data leakage
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'logout' });
+        }
+
         window.location.hash = '#/login';
       } catch (err) {
         console.error('Logout error:', err);

@@ -57,7 +57,6 @@ export class ApprovalsView {
     this.initEvents();
     await this.loadApprovals('pending');
     this.escalationTimer.updateApprovals(this.currentApprovals || []);
-    this.escalationTimer.onAutoReject = (id, title) => this.handleAutoReject(id, title);
     this.escalationTimer.start();
   }
 
@@ -137,7 +136,7 @@ export class ApprovalsView {
                   <span class="text-base-content/60 font-mono text-[11px] block">${item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span>
                 </div>
                 <div class="pt-1">
-                  <span class="text-[10px] text-warning/80 block font-mono">⏱️ Escalasi: auto-reject dalam 24 jam</span>
+                  <span class="text-[10px] text-base-content/60 block font-mono">⏱️ Persetujuan menunggu tindakan Director</span>
                 </div>
               </div>
 
@@ -179,18 +178,6 @@ export class ApprovalsView {
       this.escalationTimer.updateApprovals(items);
     } catch (err) {
       console.error('Failed to load approvals:', err);
-    }
-  }
-
-  async handleAutoReject(id, title) {
-    try {
-      await api.post(`/api/approvals/${id}/reject`, { 
-        notes: 'Auto-rejected: approval expired after 24h escalation timer' 
-      });
-      await this.loadApprovals('pending');
-      showToast('warning', 'Auto-Reject (Escalation)', `"${title}" ditolak otomatis setelah melewati batas waktu 24 jam.`);
-    } catch (err) {
-      console.error('Auto-reject failed:', err);
     }
   }
 

@@ -1,6 +1,11 @@
 /**
- * Approval Escalation Timer - Auto-reject pending approvals after 24h
- * Tracks pending approvals, shows countdown, auto-rejects on expiry
+ * Approval Escalation Timer - Informational countdown only.
+ *
+ * Client-side automatic rejection is DISABLED. The countdown is shown to
+ * the Director as informational UI only. No approval request is ever
+ * silently rejected by a browser timer. If automatic expiry is required
+ * as business policy, it must be implemented server-side with explicit
+ * Director authorization.
  */
 
 export class ApprovalEscalationTimer {
@@ -8,15 +13,15 @@ export class ApprovalEscalationTimer {
     this.checkIntervalMs = options.checkIntervalMs || 60 * 1000; // Check every minute
     this.autoRejectAfterHours = options.autoRejectAfterHours || 24;
     this.timerId = null;
-    this.onAutoReject = options.onAutoReject || (() => {});
     this.pendingApprovals = []; // { id, created_at, title, risk }
+    this.autoRejectEnabled = false; // Client-side auto-reject is disabled by policy
   }
 
   start(pendingApprovals = []) {
     this.pendingApprovals = pendingApprovals;
     this.stop();
+    // Timer runs only to refresh countdown UI, NOT to auto-reject
     this.timerId = setInterval(() => this.checkExpirations(), this.checkIntervalMs);
-    // Initial check
     this.checkExpirations();
   }
 
@@ -28,6 +33,7 @@ export class ApprovalEscalationTimer {
   }
 
   checkExpirations() {
+    // Informational only: log expired items but never auto-reject
     const now = Date.now();
     const threshold = now - (this.autoRejectAfterHours * 60 * 60 * 1000);
 
@@ -37,12 +43,7 @@ export class ApprovalEscalationTimer {
     });
 
     if (expired.length > 0) {
-      console.log(`[ApprovalEscalation] ${expired.length} approval(s) expired auto-reject threshold`);
-      expired.forEach((a) => {
-        this.onAutoReject(a.id, a.title || 'Approval');
-      });
-      // Remove expired from tracking
-      this.pendingApprovals = this.pendingApprovals.filter((a) => !expired.includes(a));
+      console.log(`[ApprovalEscalation] ${expired.length} approval(s) past 24h informational threshold (auto-reject disabled)`);
     }
   }
 

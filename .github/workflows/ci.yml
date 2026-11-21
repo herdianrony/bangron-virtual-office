@@ -71,13 +71,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
       - name: Install dependencies (exact lockfile)
         run: npm ci
       - name: Run unit suite (isolated in-memory SQLite)
         env:
-          NODE_VERSION: '22'
+          NODE_VERSION: '26'
           INITIAL_DIRECTOR_EMAIL: director@bangron.office
           INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
           HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
@@ -95,13 +95,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
       - name: Install dependencies (exact lockfile)
         run: npm ci
       - name: Build CSS bundle
         env:
-          NODE_VERSION: '22'
+          NODE_VERSION: '26'
           INITIAL_DIRECTOR_EMAIL: director@bangron.office
           INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
           HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
@@ -119,7 +119,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
       - name: Install dependencies (exact lockfile)
         run: npm ci
@@ -127,7 +127,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run E2E suite (app server starts inside this runner)
         env:
-          NODE_VERSION: '22'
+          NODE_VERSION: '26'
           INITIAL_DIRECTOR_EMAIL: director@bangron.office
           INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
           HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
@@ -160,13 +160,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
       - name: Install dependencies (exact lockfile)
         run: npm ci
       - name: Dependency vulnerability audit
         env:
-          NODE_VERSION: '22'
+          NODE_VERSION: '26'
           INITIAL_DIRECTOR_EMAIL: director@bangron.office
           INITIAL_DIRECTOR_PASSWORD: ${{ needs.generate-credentials.outputs.INITIAL_DIRECTOR_PASSWORD }}
           HERMES_WEBHOOK_SECRET: ${{ needs.generate-credentials.outputs.HERMES_WEBHOOK_SECRET }}
@@ -176,4 +176,8 @@ jobs:
         # (postcss-selector-parser via @tailwindcss/typography). Moderate
         # findings are reported in the audit output but do not block; any
         # future high/critical finding fails this job by design.
+        #
+        # NOTE: CI runs Node.js 26 to match the homelab runtime. better-sqlite3
+        # native bindings are recompiled via `npm ci` on each run, ensuring
+        # reproducible builds from a clean environment.
         run: npm audit --audit-level=high

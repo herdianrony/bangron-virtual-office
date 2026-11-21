@@ -62,6 +62,8 @@ export class BulkActionManager {
     this.container.addEventListener('change', (e) => {
       if (e.target.classList.contains('bulk-checkbox')) {
         const id = e.target.dataset.id;
+        // Guard against undefined/null IDs entering selectedIds
+        if (!id || id === 'undefined') return;
         if (e.target.checked) {
           this.selectedIds.add(id);
           e.target.closest(this.itemSelector)?.classList.add('ring-2', 'ring-primary', 'ring-offset-1');
@@ -78,6 +80,8 @@ export class BulkActionManager {
     this.container.querySelectorAll('.bulk-checkbox').forEach((cb) => {
       cb.checked = checked;
       const id = cb.dataset.id;
+      // Guard against undefined/null IDs entering selectedIds
+      if (!id || id === 'undefined') return;
       if (checked) {
         this.selectedIds.add(id);
         cb.closest(this.itemSelector)?.classList.add('ring-2', 'ring-primary', 'ring-offset-1');

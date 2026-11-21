@@ -63,7 +63,7 @@ export class TasksView {
             <table class="table table-zebra table-sm w-full text-xs">
               <thead>
                 <tr class="bg-base-300/50 text-base-content/70 border-b border-base-content/10">
-                  <th class="w-8"><input type="checkbox" id="bulk-select-all" class="bulk-checkbox bulk-select-all checkbox checkbox-sm checkbox-primary" /></th>
+                  <th class="w-8"><input type="checkbox" id="bulk-select-all" class="bulk-select-all checkbox checkbox-sm checkbox-primary" /></th>
                   <th>Task Title</th>
                   <th>Type / Subtasks</th>
                   <th>Assigned Specialist</th>
@@ -437,17 +437,31 @@ export class TasksView {
       cancelLabel: 'Batal',
       confirmType: 'error',
       onConfirm: async () => {
-        await Promise.all(ids.map((id) => api.post(`/api/tasks/${id}/cancel`, { reason: 'Bulk cancel by Director' })));
+        const results = await Promise.allSettled(
+          ids.map((id) => api.post(`/api/tasks/${id}/cancel`, { reason: 'Bulk cancel by Director' }))
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
         await this.loadTasks();
-        showToast('warning', 'Task Dibatalkan', `${ids.length} task telah dibatalkan.`);
+        if (failed > 0) {
+          showToast('warning', 'Bulk Cancel Partial', `${ids.length - failed}/${ids.length} task dibatalkan. ${failed} gagal.`);
+        } else {
+          showToast('warning', 'Task Dibatalkan', `${ids.length} task telah dibatalkan.`);
+        }
       }
     });
   }
 
   async bulkRetry(ids) {
-    await Promise.all(ids.map((id) => api.post(`/api/tasks/${id}/retry`)));
+    const results = await Promise.allSettled(
+      ids.map((id) => api.post(`/api/tasks/${id}/retry`))
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
     await this.loadTasks();
-    showToast('info', 'Task Diretry', `${ids.length} task dikirim ulang untuk dieksekusi.`);
+    if (failed > 0) {
+      showToast('warning', 'Bulk Retry Partial', `${ids.length - failed}/${ids.length} task dikirim ulang. ${failed} gagal.`);
+    } else {
+      showToast('info', 'Task Diretry', `${ids.length} task dikirim ulang untuk dieksekusi.`);
+    }
   }
 
   destroy() {

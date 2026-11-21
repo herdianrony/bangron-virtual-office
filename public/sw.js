@@ -75,9 +75,18 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin
   if (url.origin !== location.origin) return;
 
-  // API requests - network first with cache fallback
+  // API requests - NEVER cache authenticated responses by default
+  // Only GET /api/health and /api/auth/csrf are safe to cache (no session data)
+  const safeApiPaths = ['/api/health', '/api/auth/csrf'];
+  const isSafeApi = safeApiPaths.some((p) => url.pathname === p || url.pathname.startsWith(p + '/'));
+
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirstThenCache(request, API_CACHE_NAME));
+    if (isSafeApi) {
+      event.respondWith(networkFirstThenCache(request, API_CACHE_NAME));
+    } else {
+      // Network-only for all other API endpoints (auth, sessions, user data, etc.)
+      event.respondWith(fetch(request));
+    }
     return;
   }
 
@@ -235,6 +244,12 @@ self.addEventListener('message', (event) => {
   if (event.data === 'clearCache') {
     caches.delete(CACHE_NAME);
     caches.delete(API_CACHE_NAME);
+  }
+  if (event.data === 'logout') {
+    // Clear all API cache on logout to prevent cross-account data leakage
+    caches.delete(API_CACHE_NAME).then(() => {
+      console.log('[SW] API cache cleared on logout');
+    });
   }
 });
 
