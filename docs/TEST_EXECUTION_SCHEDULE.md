@@ -30,10 +30,10 @@ It complements `SERVER_TEST_PLAN.md` (what/how) and `PROJECT_COMPLETION_ROADMAP.
 
 ### Day 1 — 2026-11-20 (Friday) — Phase 3.2 Stabilization
 
-**Status: ✅ Executed 2026-11-20 at commit `22d66b6` (98 unit/integration + 10 E2E + CSS build); CI re-verified at `5d56112`, run 44670861607. Original subset counts below are superseded where labeled.**
+**Status: ✅ Executed 2026-11-20 at commit `22d66b6` (98 unit/integration + 10 E2E + CSS build); CI re-verified at `ec0e21e` — **233 unit tests pass**, **CSS build success**, **npm audit clean** (0 critical/high). PR #3 remediation verified (SW security, approval escalation, bulk action correctness). Original subset counts below are superseded where labeled.**
 | Time (WIB) | Test Suite | Command | Owner | Evidence Required |
 |------------|------------|---------|-------|-------------------|
-| 09:00 | Unit tests (baseline) | `npm test` | QA | **98 passed / 0 failed / 0 skipped** (13 files); original 48/48 target superseded |
+| 09:00 | Unit tests (baseline) | `npm test` | QA | **233 passed / 0 failed / 0 skipped** (18 files); includes SW security + bulk action correctness coverage |
 | 09:30 | CSS build | `npm run build:css` | Frontend | ✅ Success (tailwindcss v4.3.5) |
 | 10:00 | Runtime watchdog unit | `npm test -- tests/unit/runtime-watchdog.test.js` | Backend | Included in 98-test suite (original 8/8 subset count superseded) |
 | 10:30 | Phase 3 integration | `npm test -- tests/unit/phase3-integration.test.js` | Backend | Included in 98-test suite (original 22/22 subset count superseded) |

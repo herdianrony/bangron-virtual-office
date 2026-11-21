@@ -270,22 +270,22 @@ All view files updated to use ToastService
 
 | Task | Status | Assignee | PR | Notes |
 |------|--------|----------|----|-------|
-| P1.1 | 📋 Planned | — | — | |
-| P1.2 | 📋 Planned | — | — | Depends on P1.1 |
-| P1.3 | 📋 Planned | — | — | |
-| P1.4 | 📋 Planned | — | — | |
-| P1.5 | 📋 Planned | — | — | Parallel |
-| P1.6 | 📋 Planned | — | — | Depends on P1.1 |
-| P1.7 | 📋 Planned | — | — | |
-| P2.1 | 📋 Planned | — | — | After Phase 1 |
-| P2.2 | 📋 Planned | — | — | |
-| P2.3 | 📋 Planned | — | — | |
-| P2.4 | 📋 Planned | — | — | |
-| P2.5 | 📋 Planned | — | — | |
-| P2.6 | 📋 Planned | — | — | |
-| P2.7 | 📋 Planned | — | — | |
-| P2.8 | 📋 Planned | — | — | |
+| P1.1 | ✅ Done | — | #3 | Implemented |
+| P1.2 | ✅ Done | — | #3 | Implemented |
+| P1.3 | ✅ Done | — | #3 | Implemented |
+| P1.4 | ✅ Done | — | #3 | Implemented |
+| P1.5 | ✅ Done | — | #3 | Implemented |
+| P1.6 | ✅ Done | — | #3 | Implemented |
+| P1.7 | ✅ Done | — | #3 | Implemented |
+| P2.1 | ✅ Done | — | #3 | Implemented |
+| P2.2 | ✅ Done | — | #3 | Implemented |
+| P2.3 | ✅ Done | — | #3 | Implemented |
+| P2.4 | ✅ Done | — | #3 | Implemented |
+| P2.5 | ✅ Done | — | #3 | Implemented |
+| P2.6 | ✅ Done | — | #3 | Implemented |
+| P2.7 | ✅ Done | — | #3 | Implemented |
+| P2.8 | ✅ Done | — | #3 | Implemented |
 
 ---
 
-**Next Action:** Director review → approve Phase 1 start → assign to `devops` and `frontend` profiles via Kanban.
+**Next Action:** Director review → approve PR #3 → proceed to live Hermes runtime verification (Gate G6).
