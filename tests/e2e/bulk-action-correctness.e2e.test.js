@@ -1,8 +1,7 @@
 // Bulk Action correctness tests
 // Verifies: Select All not treated as individual checkbox, undefined IDs prevented,
 // selection count verified, bulk cancel/retry behavior, error handling.
-// NOTE: DOM-dependent tests require authenticated session + task seeding.
-// Run in CI with full browser context (page.request.post login + set cookies).
+// Runs against isolated E2E server (port 3102, fresh DB).
 
 import { test, expect } from '@playwright/test';
 import dotenv from 'dotenv';
@@ -13,7 +12,7 @@ const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL;
 const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD;
 
 test.describe('Bulk Action Manager correctness', () => {
-  test('bulk-action.js exports toggleAll with undefined ID guard', async ({ page }) => {
+  test('bulk-action.js toggleAll has undefined ID guard', async ({ page }) => {
     await page.goto('/office');
     await page.waitForTimeout(2000);
 
@@ -21,16 +20,12 @@ test.describe('Bulk Action Manager correctness', () => {
       return fetch('/assets/js/core/bulk-action.js').then(r => r.text());
     });
 
-    // toggleAll should guard against undefined/null IDs
     expect(bulkActionSource).toContain('toggleAll');
-    expect(bulkActionSource).toContain('id');
     expect(bulkActionSource).toContain('selectedIds');
-
-    // Verify bulkCancel uses Promise.allSettled for error handling
-    expect(bulkActionSource).toContain('Promise.allSettled');
-
-    // Verify bulkRetry uses Promise.allSettled for error handling
-    expect(bulkActionSource).toContain('bulkRetry');
+    // Undefined ID guard in toggleAll
+    expect(bulkActionSource).toContain("if (!id || id === 'undefined') return;");
+    // Undefined ID guard in individual checkbox handler
+    expect(bulkActionSource).toContain("if (!id || id === 'undefined') return;");
   });
 
   test('tasks-view.js Select All has no bulk-checkbox class', async ({ page }) => {
@@ -41,26 +36,28 @@ test.describe('Bulk Action Manager correctness', () => {
       return fetch('/assets/js/views/tasks-view.js').then(r => r.text());
     });
 
-    // Select All checkbox should NOT have bulk-checkbox class
+    // Select All checkbox exists with id="bulk-select-all"
     expect(tasksViewSource).toContain('id="bulk-select-all"');
-    expect(tasksViewSource).not.toContain('bulk-select-all" class="bulk-checkbox');
-    expect(tasksViewSource).not.toContain('bulk-select-all" class=".*bulk-checkbox');
 
-    // Individual checkboxes should have bulk-checkbox class
+    // Select All does NOT have bulk-checkbox class (it's separate from tbody checkboxes)
+    expect(tasksViewSource).not.toMatch(/bulk-select-all"[^>]*bulk-checkbox/);
+
+    // Individual checkboxes have bulk-checkbox class
     expect(tasksViewSource).toContain('class="bulk-checkbox');
+    expect(tasksViewSource).toContain('data-id="${t.id}"');
   });
 
-  test('bulkCancel and bulkRetry have error handling', async ({ page }) => {
+  test('tasks-view.js bulkCancel and bulkRetry use Promise.allSettled', async ({ page }) => {
     await page.goto('/office');
     await page.waitForTimeout(2000);
 
-    const bulkActionSource = await page.evaluate(() => {
-      return fetch('/assets/js/core/bulk-action.js').then(r => r.text());
+    const tasksViewSource = await page.evaluate(() => {
+      return fetch('/assets/js/views/tasks-view.js').then(r => r.text());
     });
 
-    // Verify error handling patterns
-    expect(bulkActionSource).toContain('catch');
-    expect(bulkActionSource).toContain('Promise.allSettled');
+    expect(tasksViewSource).toContain('bulkCancel');
+    expect(tasksViewSource).toContain('bulkRetry');
+    expect(tasksViewSource).toContain('Promise.allSettled');
   });
 
   test('approval-escalation.js auto-reject disabled', async ({ page }) => {
@@ -71,10 +68,10 @@ test.describe('Bulk Action Manager correctness', () => {
       return fetch('/assets/js/core/approval-escalation.js').then(r => r.text());
     });
 
-    // Auto-reject should be disabled (informational countdown only)
+    // Auto-reject is disabled (countdown is informational only)
     expect(escSource).toContain('autoReject');
     expect(escSource).toContain('informational');
-    // Should NOT silently reject
+    // Should NOT silently reject via handleAutoReject
     expect(escSource).not.toContain('handleAutoReject()');
   });
 });

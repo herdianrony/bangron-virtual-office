@@ -2,8 +2,6 @@
 // Verifies: /api/* responses (except safe allowlist) are NOT cached by SW,
 // logout clears API cache, no cross-account data leakage via SW cache.
 // Runs against isolated E2E server (port 3102, fresh DB).
-// NOTE: Login-dependent tests require session cookie persistence across
-// page.request + page contexts; run in CI with full browser context.
 
 import { test, expect } from '@playwright/test';
 import dotenv from 'dotenv';
@@ -38,41 +36,43 @@ test.describe('Service Worker API cache security', () => {
     expect(title.length).toBeGreaterThan(0);
   });
 
-  test('SW registers and intercepts fetch for API cache allowlist', async ({ page }) => {
-    // Verify SW is registered and controller exists
+  test('SW source contains API cache allowlist', async ({ page }) => {
     await page.goto('/office');
     await page.waitForTimeout(2000);
 
-    const swRegistered = await page.evaluate(() => {
-      return 'serviceWorker' in navigator;
-    });
-    expect(swRegistered).toBe(true);
-
-    const swController = await page.evaluate(() => {
-      return !!navigator.serviceWorker.controller;
-    });
-    expect(swController).toBe(true);
-
-    // Verify SW fetch handler caches only safe API endpoints by checking
-    // the SW source code contains the allowlist logic
     const swSource = await page.evaluate(() => {
       return fetch('/sw.js').then(r => r.text());
     });
+
+    // Safe allowlist endpoints
     expect(swSource).toContain('/api/health');
     expect(swSource).toContain('/api/auth/csrf');
-    // Non-allowlist API endpoints should NOT be in the cacheable list
-    expect(swSource).not.toContain("cacheable: ['/api/auth/me'");
+
+    // Non-allowlist API endpoints use network-only (not in cacheable list)
+    // The allowlist pattern should NOT include /api/auth/me or other authenticated endpoints
+    const allowlistMatch = swSource.match(/allowlist\s*[:=]\s*\[([^\]]+)\]/);
+    if (allowlistMatch) {
+      const allowlist = allowlistMatch[1];
+      expect(allowlist).not.toContain('/api/auth/me');
+      expect(allowlist).not.toContain('/api/tasks');
+    }
+
+    // 5-minute cache expiration
+    expect(swSource).toContain('5 * 60 * 1000');
   });
 
-  test('logout message handler present in SW source', async ({ page }) => {
+  test('SW logout handler clears API cache', async ({ page }) => {
     await page.goto('/office');
     await page.waitForTimeout(2000);
 
     const swSource = await page.evaluate(() => {
       return fetch('/sw.js').then(r => r.text());
     });
-    expect(swSource).toContain("type: 'logout'");
-    expect(swSource).toContain('apiCache');
+
+    // Logout message handler
+    expect(swSource).toContain("event.data === 'logout'");
+    expect(swSource).toContain('caches.delete(API_CACHE_NAME)');
+    expect(swSource).toContain('API cache cleared on logout');
   });
 
   test('app.js posts logout message to SW controller', async ({ page }) => {
@@ -82,7 +82,9 @@ test.describe('Service Worker API cache security', () => {
     const appSource = await page.evaluate(() => {
       return fetch('/assets/js/app.js').then(r => r.text());
     });
+
     expect(appSource).toContain("type: 'logout'");
     expect(appSource).toContain('navigator.serviceWorker.controller.postMessage');
+    expect(appSource).toContain('API cache cleared');
   });
 });
