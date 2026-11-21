@@ -1,5 +1,6 @@
 import { api } from './core/api.js';
 import { store } from './core/store.js';
+import { resolveRuntimeIndicator } from './core/runtime-indicator.js';
 import Router from './core/router.js';
 import { realtimeClient } from './realtime/websocket-client.js';
 
@@ -92,29 +93,25 @@ class App {
     // runtime availability (runtimeStatus, fed by runtime.status.changed).
     // When the runtime is explicitly reported disconnected, the UI shows
     // "Runtime Offline" even though the WebSocket itself is still live.
+    // Tamu (tidak ada user) tidak punya kanal realtime -> "Offline", bukan
+    // "Live Realtime". Logika ada di core/runtime-indicator.js (uji unit).
     const renderRuntimeIndicator = () => {
       const dot = document.getElementById('runtime-dot');
       const text = document.getElementById('runtime-text');
       if (!dot || !text) return;
-      const { wsConnected, runtimeStatus } = store.state;
-      const runtimeOffline =
-        runtimeStatus && runtimeStatus.connected === false && Boolean(runtimeStatus.reason);
-      if (!wsConnected) {
-        dot.className = 'status-dot offline';
-        text.innerText = 'Reconnecting...';
-      } else if (runtimeOffline) {
-        dot.className = 'status-dot offline';
-        text.innerText = 'Runtime Offline';
-      } else {
-        dot.className = 'status-dot online';
-        text.innerText = 'Live Realtime';
-      }
+      const { dotClass, text: label } = resolveRuntimeIndicator(store.state);
+      dot.className = dotClass;
+      text.innerText = label;
     };
     store.subscribe((key) => {
       if (key === 'state_updated' || key === 'runtime_status_changed') {
         renderRuntimeIndicator();
       }
     });
+    // Boot: tamu tidak memicu event store apa pun (connect() return lebih awal;
+    // setState({csrfToken}) terjadi sebelum subscribe), jadi render sekali di
+    // sini agar indikator tidak tertinggal di default statis "Live Realtime".
+    renderRuntimeIndicator();
   }
 
   initThemeController() {

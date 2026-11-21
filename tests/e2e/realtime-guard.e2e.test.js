@@ -29,6 +29,10 @@ test.describe('realtime client guards', () => {
 
     expect(sockets.length).toBe(0);
     expect(await page.evaluate(() => window.store?.state?.wsConnected)).toBe(false);
+    // Indikator nav tidak boleh mengaku "Live Realtime" saat wsConnected false.
+    await expect(page.locator('#runtime-text')).not.toHaveText('Live Realtime', { timeout: 10000 });
+    await expect(page.locator('#runtime-text')).toHaveText('Offline', { timeout: 10000 });
+    await expect(page.locator('#runtime-dot')).toHaveClass(/offline/, { timeout: 10000 });
   });
 
   test('kontrak baru /api/auth/me 200 {isAuthenticated:false}: tamu tetap tanpa sesi', async ({ page }) => {
@@ -79,6 +83,9 @@ test.describe('realtime client guards', () => {
     expect(sockets.length).toBe(1);
     expect(await page.evaluate(() => window.store?.state?.wsConnected)).toBe(false);
     expect(await page.evaluate(() => window.store?.state?.runtimeStatus?.reason)).toBe('ws_unauthorized');
+    // Bukan "Reconnecting..." (tidak ada reconnect loop) apalagi "Live Realtime".
+    await expect(page.locator('#runtime-text')).toHaveText('Unauthorized', { timeout: 10000 });
+    await expect(page.locator('#runtime-dot')).toHaveClass(/offline/, { timeout: 10000 });
   });
 
   test('login → reload → WS tersambung + snapshot agen', async ({ page }) => {
