@@ -23,12 +23,12 @@ Each gate requires: **implementation + tests passing + Director approval**.
 | G5 | 7 | Deployment rehearsal & integration | ⏳ | PR #6 approved + staging sign-off |
 | G6 | 10 | Final release & production deploy | ⏳ | Production verified + Live Hermes Runtime Integration gate passed |
 
-> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2
+> **PR numbering (updated 2026-11-20):** PR #1 = security hardening & Phase 3.2
 > stabilization (`fix/security-hardening` → `main`); PR #2 = GitHub Actions CI
-> (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 approval workflow
-> & RBAC (planned). Subsequent phases continue the numbering: Phase 5 → PR #4,
-> Phase 6 → PR #5, Phase 7 → PR #6. All gate references below use this finalized
-> numbering; the final release merges PRs #1–#6.
+> (`chore/github-actions-ci`); PR #3 = G6.1 Hermes EventBridge remediation
+> (`fix/g6-hermes-eventbridge`); PR #4 = Phase 4 approval workflow & RBAC;
+> PR #5 = Phase 5; PR #6 = Phase 6; PR #7 = Phase 7. All gate references below
+> use this updated numbering; the final release merges PRs #1–#7.
 >
 > **Outstanding production-readiness blocker:** Live Hermes Runtime Integration
 > verification (kanban `t_e15f8a03`) must pass before Gate G6. Simulated Hermes

@@ -1,7 +1,9 @@
 // Shared, deterministic timestamp parsing for Hermes event ingestion.
 //
 // Supported input formats (explicit contract — nothing else is accepted):
-//   1. Unix seconds: integer number or 10-digit string (1e9 .. 1e10-1).
+//   1. Unix seconds: integer or fractional number / string (1e9 .. 1e10-1).
+//      Fractional seconds (e.g. 1795242296.5631661) are the native Hermes
+//      SSE API Server timestamp format; sub-second precision is floored.
 //   2. Unix milliseconds: integer number or 13-digit string (1e12 .. 1e13-1).
 //   3. ISO-8601 with explicit time and zone: YYYY-MM-DDTHH:MM:SS[.frac](Z|±HH:MM).
 //      This is the native Hermes outbound-webhook format (agent/shell_hooks.py
@@ -17,15 +19,15 @@ const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?
 
 export function parseEventTimestamp(value) {
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) return null;
-    if (value >= 1e9 && value < 1e10) return value * 1000; // unix seconds
-    if (value >= 1e12 && value < 1e13) return value; // unix milliseconds
+    if (!Number.isFinite(value) || value <= 0) return null;
+    if (value >= 1e9 && value < 1e10) return Math.floor(value * 1000); // unix seconds (fractional allowed)
+    if (value >= 1e12 && value < 1e13 && Number.isInteger(value)) return value; // unix milliseconds
     return null; // ambiguous magnitudes are rejected, not guessed
   }
   if (typeof value !== 'string') return null;
   const s = value.trim();
   if (s === '') return null;
-  if (UNIX_SEC_RE.test(s)) return Number(s) * 1000;
+  if (/^\d{10}(\.\d+)?$/.test(s)) return Math.floor(Number(s) * 1000); // unix seconds (fractional allowed)
   if (UNIX_MS_RE.test(s)) return Number(s);
 
   const m = s.match(ISO_RE);

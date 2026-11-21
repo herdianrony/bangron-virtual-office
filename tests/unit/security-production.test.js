@@ -115,3 +115,25 @@ describe('production SESSION_SECRET enforcement', () => {
     process.env.SESSION_SECRET = PROD_SECRET;
   });
 });
+
+describe('production Content-Security-Policy', () => {
+  // PixiJS v8 membangun kode dinamis lewat `new Function`; tanpa 'unsafe-eval'
+  // layer agen halaman Office tidak pernah render (terbukti: pixiCanvas 0).
+  // Inline script TETAP diblokir — 'unsafe-inline' tidak boleh ditambahkan.
+  it('memuat script-src self + unsafe-eval tanpa unsafe-inline', async () => {
+    const res = await request(app).get('/office');
+    expect(res.status).toBe(200);
+
+    const csp = res.headers['content-security-policy'];
+    expect(csp, 'CSP header must be emitted in production').toBeTruthy();
+
+    const directive = csp
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('script-src'));
+    expect(directive, `script-src directive missing in: ${csp}`).toBeTruthy();
+    expect(directive).toContain("'self'");
+    expect(directive).toContain("'unsafe-eval'");
+    expect(directive).not.toContain("'unsafe-inline'");
+  });
+});

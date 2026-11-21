@@ -1,4 +1,5 @@
 import { api } from '../core/api.js';
+import { toast } from '../core/toast.js';
 
 export class LoginView {
   constructor(container) {
@@ -91,8 +92,11 @@ export class LoginView {
           if (res.csrfToken) {
             api.setCsrfToken(res.csrfToken);
           }
-          window.location.hash = '#/office';
-          window.location.reload();
+          // Restore previous view hash without full page reload
+          const preLoginHash = sessionStorage.getItem('preLoginHash') || '#/office';
+          sessionStorage.removeItem('preLoginHash');
+          toast.success('Login berhasil. Selamat datang, Director.');
+          window.location.hash = preLoginHash;
         }
       } catch (err) {
         errMsg.innerText = err.message || 'Login failed';

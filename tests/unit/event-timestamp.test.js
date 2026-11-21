@@ -35,6 +35,13 @@ describe('parseEventTimestamp — supported formats', () => {
     expect(parseEventTimestamp('2026-11-20T00:30:00-05:00')).toBe(expected);
   });
 
+  it('parses fractional unix seconds (native Hermes SSE API Server format)', () => {
+    // Commit 2f819ff: SSE runtime mengirim detik Unix desimal; sub-detik di-flush.
+    expect(parseEventTimestamp(1763600000.5)).toBe(1763600000500);
+    expect(parseEventTimestamp('1763600000.5')).toBe(1763600000500);
+    expect(parseEventTimestamp('1795242296.5631661')).toBe(1795242296563);
+  });
+
   it('accepts the exact magnitude boundaries and rejects ambiguous ones', () => {
     expect(parseEventTimestamp(1000000000)).toBe(1000000000000); // min unix sec
     expect(parseEventTimestamp(9999999999)).toBe(9999999999000); // max unix sec
@@ -56,7 +63,6 @@ describe('parseEventTimestamp — invalid and missing input returns null (never 
   it('rejects unsupported string shapes', () => {
     expect(parseEventTimestamp('not-a-date')).toBeNull();
     expect(parseEventTimestamp('2026-11-20')).toBeNull(); // date-only, no time/zone
-    expect(parseEventTimestamp('1763600000.5')).toBeNull();
     expect(parseEventTimestamp('2026-11-20T05:30:00')).toBeNull(); // no zone
     expect(parseEventTimestamp('2026-11-20T05:30:00+25:00')).toBeNull();
   });
@@ -67,7 +73,6 @@ describe('parseEventTimestamp — invalid and missing input returns null (never 
     expect(parseEventTimestamp(0)).toBeNull();
     expect(parseEventTimestamp(NaN)).toBeNull();
     expect(parseEventTimestamp(Infinity)).toBeNull();
-    expect(parseEventTimestamp(1763600000.5)).toBeNull();
     expect(parseEventTimestamp(null)).toBeNull();
     expect(parseEventTimestamp(undefined)).toBeNull();
     expect(parseEventTimestamp('')).toBeNull();

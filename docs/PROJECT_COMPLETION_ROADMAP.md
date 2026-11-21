@@ -8,7 +8,7 @@
 **Tested code SHA (Phase 3.2.2 evidence):** `22d66b69ccccb12004d855432f9c90c3feff270f` — all Phase 3.2.2 test evidence binds to this commit; CI re-verification ran at `5d56112` (PR #2). The two SHAs are distinct pieces of evidence.
 **Current PR:** #1 — Security hardening and top-down visual foundation (DRAFT, OPEN — ready for Director review; merge awaits explicit approval). PR #2 (GitHub Actions CI, head `5d56112`) is stacked on PR #1; both unmerged; `main` at `82fc1f6`.
 
-> **PR numbering (finalized 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`, stacked on PR #1); PR #3 = Phase 4 (planned); Phase 5 → PR #4, Phase 6 → PR #5, Phase 7 → PR #6. Task references below use this numbering.
+> **PR numbering (updated 2026-11-20):** PR #1 = security hardening & Phase 3.2; PR #2 = GitHub Actions CI (`chore/github-actions-ci`); PR #3 = G6.1 Hermes EventBridge remediation (`fix/g6-hermes-eventbridge`); PR #4 = Phase 4; PR #5 = Phase 5; PR #6 = Phase 6; PR #7 = Phase 7. Task references below use this numbering.
 
 ---
 
