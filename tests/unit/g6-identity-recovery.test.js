@@ -5,7 +5,7 @@ import { seedInitialOffice } from '../../src/database/seeds/initial_office.js';
 import { StateReconciler } from '../../src/integrations/hermes/state-reconciler.js';
 import { AgentRepository } from '../../src/database/repositories/agent.repository.js';
 import { TaskRepository } from '../../src/database/repositories/task.repository.js';
-import { recoverActiveHermesRuns } from '../../src/server.js';
+import { recoverActiveHermesRuns } from '../../src/integrations/hermes/startup-recovery.js';
 import { hermesEventBridge } from '../../src/integrations/hermes/event-bridge.js';
 
 describe('G6.1 — StateReconciler Agent Identity Safety', () => {

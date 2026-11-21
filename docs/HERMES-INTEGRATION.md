@@ -244,7 +244,7 @@ TaskService.assignAgent()
 | 7. State reconciliation | `StateReconciler.reconcile()` | `src/integrations/hermes/state-reconciler.js` | ✅ Implemented |
 | 8. SQLite persistence | `EventRepository.recordEvent()` | `src/database/repositories/event.repository.js` | ✅ Implemented |
 | 9. WebSocket broadcast | `eventPublisher.publish*()` | `src/realtime/event-publisher.js` | ✅ Implemented |
-| 10. Startup recovery | `recoverActiveHermesRuns()` | `src/server.js` | ✅ Implemented |
+| 10. Startup recovery | `recoverActiveHermesRuns()` | `src/integrations/hermes/startup-recovery.js` (dipanggil `src/server.js`) | ✅ Implemented |
 | 11. Graceful shutdown | `hermesEventBridge.stopAll()` | `src/server.js` | ✅ Implemented |
 
 **Verification boundary:**

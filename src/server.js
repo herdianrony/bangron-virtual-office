@@ -1,4 +1,5 @@
 import http from 'http';
+import { pathToFileURL } from 'url';
 import { createApp } from './app.js';
 import { appConfig } from './config/index.js';
 import { getDatabase, closeDatabase } from './database/connection.js';
@@ -7,10 +8,13 @@ import { createWebSocketServer } from './realtime/websocket-server.js';
 import { demoEngine } from './modules/demo/demo-engine.js';
 import { HermesAdapter } from './integrations/hermes/adapter.js';
 import { AgentRepository } from './database/repositories/agent.repository.js';
-import { TaskRepository } from './database/repositories/task.repository.js';
 import { hermesEventBridge } from './integrations/hermes/event-bridge.js';
+import { recoverActiveHermesRuns } from './integrations/hermes/startup-recovery.js';
 import { eventPublisher } from './realtime/event-publisher.js';
 import logger from './utils/logger.js';
+
+// Backwards-compatible re-export: konsumen lama boleh mengimpor dari server.js.
+export { recoverActiveHermesRuns } from './integrations/hermes/startup-recovery.js';
 
 const RUNTIME_CHECK_INTERVAL_MS = 30000;
 
@@ -125,59 +129,21 @@ async function startServer() {
 }
 
 /**
- * G6.1: Recover active Hermes runs after application restart.
- * Queries tasks with non-empty hermes_run_id and non-terminal status,
- * rebuilds run-to-task mappings, and resumes SSE polling for eligible runs.
+ * True hanya jika modul ini dijalankan langsung (node src/server.js),
+ * bukan diimpor sebagai dependensi (mis. dari test).
  *
- * Accepts a TaskRepository-compatible object with a `db` property for
- * dependency injection in tests.
+ * Tanpa guard ini, import ke src/server.js akan mengeksekusi startServer()
+ * dan merebut port produksi (EADDRINUSE saat service hidup).
  */
-export async function recoverActiveHermesRuns(db) {
-  const taskRepo = new TaskRepository(db);
-  const terminalStatuses = ['completed', 'failed', 'cancelled'];
-
-  // Find tasks with a Hermes run ID that are not in a terminal state
-  const activeTasks = db.prepare(`
-    SELECT id, hermes_run_id, status
-    FROM agent_tasks
-    WHERE hermes_run_id IS NOT NULL
-      AND hermes_run_id != ''
-      AND status NOT IN (${terminalStatuses.map(() => '?').join(',')})
-  `).all(...terminalStatuses);
-
-  if (activeTasks.length === 0) {
-    logger.info('No active Hermes runs to recover');
-    return { recovered: [], skipped: [] };
-  }
-
-  logger.info({ count: activeTasks.length }, 'Recovering active Hermes runs');
-
-  const recovered = [];
-  const skipped = [];
-
-  for (const task of activeTasks) {
-    const { id: taskId, hermes_run_id: runId, status } = task;
-
-    // Validate run_id format
-    if (!runId || typeof runId !== 'string' || runId.trim() === '') {
-      logger.warn({ taskId, runId }, 'Invalid run_id in recovered task, skipping');
-      skipped.push({ taskId, reason: 'invalid_run_id' });
-      continue;
-    }
-
-    // Rebuild run-to-task mapping in EventBridge
-    hermesEventBridge.registerRunTaskMapping(runId, taskId);
-    logger.info({ taskId, runId, status }, 'Re-registered run-to-task mapping');
-    recovered.push({ taskId, runId, status });
-
-    // Resume polling for this run (fire-and-forget)
-    // Each run's failure is isolated — one failure doesn't stop others
-    hermesEventBridge.startPolling(runId).catch((err) => {
-      logger.error({ err, taskId, runId }, 'EventBridge polling failed for recovered run');
-    });
-  }
-
-  return { recovered, skipped };
+export function isDirectRun(
+  importMetaUrl = import.meta.url,
+  entryPoint = process.argv[1]
+) {
+  if (!entryPoint) return false;
+  return importMetaUrl === pathToFileURL(entryPoint).href;
 }
 
-startServer();
+if (isDirectRun()) {
+  startServer();
+}
+
