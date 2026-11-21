@@ -1,8 +1,22 @@
 import { api } from '../core/api.js';
+import { SkeletonLoader } from '../core/skeleton.js';
 
 export class ApprovalsView {
   constructor(container) {
     this.container = container;
+  }
+
+  showSkeleton() {
+    this.container.innerHTML = \`
+      <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
+          \${SkeletonLoader.skeletonStat()}
+        </div>
+        <div class="space-y-3" id="approvals-list">
+          \${SkeletonLoader.skeletonList(5)}
+        </div>
+      </div>
+    \`;
   }
 
   async render() {

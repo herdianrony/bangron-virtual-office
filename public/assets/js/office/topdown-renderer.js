@@ -757,7 +757,35 @@ export class TopdownRenderer {
       ${this.renderCorridors(corridors)}
       ${this.renderWalls(rooms, corridors)}
       ${this.renderRooms(rooms)}
+      ${this.renderHitTestLayer(rooms, corridors)}
     `;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Hit-Test Layer (invisible shapes for room/furniture/decor clicks)   */
+  /* ------------------------------------------------------------------ */
+
+  renderHitTestLayer(rooms = [], corridors = []) {
+    const roomsHit = rooms.map((room) => {
+      const { id, name, position_x: px, position_y: py, width: w, height: h, department } = room;
+      return `<rect class="td-hit-test-room" x="${px + 1}" y="${py + 1}" width="${w - 2}" height="${h - 2}" rx="2" data-name="${esc(name)} — ${esc(department || 'General')}" pointer-events="all"/>`;
+    }).join('\n');
+
+    const corridorsHit = (corridors && corridors.length ? corridors : DEFAULT_CORRIDORS).map((c) => {
+      return `<rect class="td-hit-test-corridor" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" data-name="Koridor ${c.id}" pointer-events="all"/>`;
+    }).join('\n');
+
+    // Note: Furniture/decor hit-test will be added via separate method for dynamic workstations
+    return `<g id="hit-test-layer" pointer-events="all" style="display: none;">\n${roomsHit}\n${corridorsHit}\n</g>`;
+  }
+
+  /* Helper: render hit-test shapes for furniture/workstations */
+  renderFurnitureHitTest(workstations = []) {
+    return workstations.map((ws) => {
+      const { id, name, position_x: px, position_y: py, width: w, height: h, workstation_type } = ws;
+      const label = `${name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[workstation_type] || 'Furnitur kantor'}`;
+      return `<rect class="td-hit-test-furniture" x="${px}" y="${py}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
+    }).join('\n');
   }
 }
 

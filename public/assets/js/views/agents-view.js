@@ -1,8 +1,22 @@
 import { api } from '../core/api.js';
+import { SkeletonLoader } from '../core/skeleton.js';
 
 export class AgentsView {
   constructor(container) {
     this.container = container;
+  }
+
+  showSkeleton() {
+    this.container.innerHTML = \`
+      <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
+          \${SkeletonLoader.skeletonStat()}
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="agents-grid">
+          \${SkeletonLoader.skeletonCard()}
+        </div>
+      </div>
+    \`;
   }
 
   async render() {
@@ -170,10 +184,15 @@ export class AgentsView {
                   <i class="fi fi-rr-marker text-[11px] text-base-content/40"></i>
                   <span>${agent.room_name || 'Floor'}</span>
                 </div>
-                <button class="btn btn-ghost btn-xs text-base-content hover:text-primary btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}">
-                  <i class="${agent.status === 'waiting' ? 'fi fi-rr-play text-xs text-success' : 'fi fi-rr-pause text-xs text-warning'}"></i>
-                  <span>${agent.status === 'waiting' ? 'Resume' : 'Pause'}</span>
-                </button>
+                ${(() => {
+                  const terminalStatuses = ['completed', 'failed', 'cancelled', 'idle', 'offline'];
+                  const isTerminal = terminalStatuses.includes(agent.status);
+                  const isWaiting = agent.status === 'waiting';
+                  if (isTerminal) {
+                    return '<button class="btn btn-ghost btn-xs text-base-content/40 btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}" disabled title="Terminal status: cannot pause/resume"><i class="fi fi-rr-pause text-xs text-base-content/40"></i><span>N/A</span></button>';
+                  }
+                  return '<button class="btn btn-ghost btn-xs text-base-content hover:text-primary btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}"><i class="${isWaiting ? 'fi fi-rr-play text-xs text-success' : 'fi fi-rr-pause text-xs text-warning'}"></i><span>${isWaiting ? 'Resume' : 'Pause'}</span></button>';
+                })()}
               </div>
             </div>
           </div>
@@ -230,6 +249,13 @@ export class AgentsView {
       if (btn) {
         const id = btn.dataset.id;
         const status = btn.dataset.status;
+        // Only allow pause/resume for active statuses
+        const pausableStatuses = ['working', 'thinking', 'collaborating', 'walking'];
+        const resumableStatuses = ['waiting'];
+        if (!pausableStatuses.includes(status) && !resumableStatuses.includes(status)) {
+          toast.warning(`${status.charAt(0).toUpperCase() + status.slice(1)} agent cannot be paused or resumed`);
+          return;
+        }
         const cmd = status === 'waiting' ? 'resume' : 'pause';
         await api.post(`/api/agents/${id}/commands`, { command: cmd });
         await this.loadAgents();
