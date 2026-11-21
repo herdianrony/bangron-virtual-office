@@ -85,6 +85,6 @@ test.describe('Service Worker API cache security', () => {
 
     expect(appSource).toContain("type: 'logout'");
     expect(appSource).toContain('navigator.serviceWorker.controller.postMessage');
-    expect(appSource).toContain('API cache cleared');
+    expect(appSource).toContain('Clear Service Worker API cache');
   });
 });
