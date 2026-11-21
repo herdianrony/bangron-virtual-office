@@ -373,7 +373,7 @@ describe('G6.1 — TaskService Hermes Dispatch & EventBridge Integration', () =>
       // Verify actual newline characters exist
       expect(instruction).toContain('\n');
       // Verify no literal backslash-n sequences as separators
-      expect(instruction).not.toMatch(/\\\\n/);
+      expect(instruction).not.toContain('\\n');
       // Verify structure: blank lines between sections (double newline)
       expect(instruction).toContain('\n\n');
     });
