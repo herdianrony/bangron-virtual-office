@@ -101,6 +101,9 @@ export class OfficeView {
         <!-- Hover Tooltip -->
         <div id="office-tooltip"></div>
 
+        <!-- Mobile Inspector Backdrop -->
+        <div class="agent-inspector-backdrop" id="inspector-backdrop"></div>
+        
         <!-- Floating Agent Inspector Drawer (DaisyUI Card) -->
         <div class="agent-inspector card bg-base-100/95 backdrop-blur border border-base-content/15 shadow-2xl p-4" id="agent-inspector">
           <div class="flex items-center justify-between pb-2.5 border-b border-base-content/10">
@@ -175,10 +178,13 @@ export class OfficeView {
     // Load State from Backend API
     await this.loadInitialOfficeState();
 
-    // Start movement engine
-    movementEngine.setUpdateCallback((agents) => {
+    // Start movement engine. The callback receives (agents, deltaSec) from
+    // MovementEngine.tick(); deltaSec is the elapsed seconds since the last
+    // frame and is required by CameraController.updateFollow() for time-based
+    // lerp smoothing. Without it, dt is ReferenceError'd and animation dies.
+    movementEngine.setUpdateCallback((agents, deltaSec) => {
       this.renderAvatars(agents);
-      this.camera.updateFollow(agents);
+      this.camera.updateFollow(agents, deltaSec);
     });
     movementEngine.start();
 
@@ -219,12 +225,30 @@ export class OfficeView {
       // Render static layers for the active view mode
       this.renderStaticLayers();
 
+      // Add furniture hit-test shapes now that workstations are loaded
+      this.addFurnitureHitTest();
+
       // Sync agents to movement engine
       store.setAgents(state.agents);
       movementEngine.syncAgents(state.agents);
     } catch (err) {
       console.error('Failed to load virtual office state:', err);
     }
+  }
+
+  /** Add furniture hit-test shapes to the SVG hit-test layer */
+  addFurnitureHitTest() {
+    const hitTestLayer = document.getElementById('hit-test-layer');
+    if (!hitTestLayer) return;
+    const workstations = store.state.workstations || [];
+    if (workstations.length === 0) return;
+    const furnitureHit = topdownRenderer.renderFurnitureHitTest(workstations);
+    const existing = hitTestLayer.querySelectorAll('.td-hit-test-furniture');
+    existing.forEach(el => el.remove());
+    const furnitureGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    furnitureGroup.classList.add('td-hit-test-furniture-group');
+    furnitureGroup.innerHTML = furnitureHit;
+    hitTestLayer.appendChild(furnitureGroup);
   }
 
   renderStaticLayers() {
@@ -249,6 +273,9 @@ export class OfficeView {
     this.camera?.fitBounds(topdownRenderer.BOUNDS);
 
     this.renderStaticLayers();
+
+    // Add furniture hit-test shapes to the SVG hit-test layer
+    this.addFurnitureHitTest();
 
     // Wall clock ticks while the plan is visible
     topdownRenderer.startClock();
@@ -356,10 +383,16 @@ export class OfficeView {
     });
 
     // Inspector close button
-    document.getElementById('insp-close')?.addEventListener('click', () => {
-      document.getElementById('agent-inspector')?.classList.remove('open');
+    const closeInspector = () => {
+      const inspector = document.getElementById('agent-inspector');
+      const backdrop = document.getElementById('inspector-backdrop');
+      inspector?.classList.remove('open', 'mobile-open');
+      backdrop?.classList.remove('open');
       store.setState({ selectedAgentId: null });
-    });
+    };
+    
+    document.getElementById('insp-close')?.addEventListener('click', closeInspector);
+    document.getElementById('inspector-backdrop')?.addEventListener('click', closeInspector);
 
     // Day/night toggle
     document.getElementById('hud-night')?.addEventListener('click', () => this.setNight(!this.nightMode));
@@ -368,7 +401,8 @@ export class OfficeView {
     this.initTooltip();
 
     // Agent interaction: ceiling lamps toggle night; agents are hit-tested on
-    // the PixiJS layer (client coords -> world coords via the camera transform)
+    // the PixiJS layer (client coords -> world coords via the camera transform).
+    // If no agent is hit, check the SVG hit-test layer for rooms/furniture/decor.
     this.container.addEventListener('click', (e) => {
       const lampNode = e.target.closest('.td-lamp');
       if (lampNode) {
@@ -378,6 +412,31 @@ export class OfficeView {
       const agentId = this.pickAgentAt(e.clientX, e.clientY);
       if (agentId) {
         this.openAgentInspector(agentId);
+        return;
+      }
+      // No agent hit -> check SVG hit-test layer for rooms/furniture/corridors
+      const hitTestLayer = document.getElementById('hit-test-layer');
+      if (hitTestLayer) {
+        // Temporarily show hit-test layer for elementFromPoint
+        hitTestLayer.style.display = 'block';
+        const svgEl = document.elementFromPoint(e.clientX, e.clientY);
+        hitTestLayer.style.display = 'none';
+        if (svgEl && svgEl.closest && svgEl.closest('.td-hit-test-room, .td-hit-test-corridor, .td-hit-test-furniture')) {
+          const target = svgEl.closest('.td-hit-test-room, .td-hit-test-corridor, .td-hit-test-furniture');
+          const name = target.getAttribute('data-name');
+          if (name) {
+            // Show tooltip for the clicked element
+            const tip = document.getElementById('office-tooltip');
+            if (tip) {
+              tip.textContent = name;
+              tip.style.display = 'block';
+              tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 290) + 'px';
+              tip.style.top = e.clientY + 14 + 'px';
+              // Auto-hide after 3 seconds
+              setTimeout(() => { tip.style.display = 'none'; }, 3000);
+            }
+          }
+        }
       }
     });
 
@@ -393,6 +452,11 @@ export class OfficeView {
       const id = store.state.selectedAgentId;
       if (id) {
         const current = store.getAgent(id);
+        const terminalStatuses = ['completed', 'failed', 'cancelled', 'idle', 'offline'];
+        if (terminalStatuses.includes(current?.status)) {
+          toast.warning(`${current.status.charAt(0).toUpperCase() + current.status.slice(1)} agent cannot be paused or resumed`);
+          return;
+        }
         const cmd = current?.status === 'waiting' ? 'resume' : 'pause';
         await api.post(`/api/agents/${id}/commands`, { command: cmd });
         this.openAgentInspector(id);
@@ -503,9 +567,17 @@ export class OfficeView {
 
     store.setState({ selectedAgentId: agentId });
     const inspector = document.getElementById('agent-inspector');
+    const backdrop = document.getElementById('inspector-backdrop');
     if (!inspector) return;
 
-    inspector.classList.add('open');
+    const isMobile = window.innerWidth < 640;
+    
+    if (isMobile) {
+      inspector.classList.add('mobile-open');
+      if (backdrop) backdrop.classList.add('open');
+    } else {
+      inspector.classList.add('open');
+    }
 
     document.getElementById('insp-name').innerText = agent.display_name;
     document.getElementById('insp-dept').innerText = agent.department || 'General';
@@ -528,9 +600,22 @@ export class OfficeView {
 
     const pauseBtn = document.getElementById('insp-pause-btn');
     if (pauseBtn) {
-      pauseBtn.innerHTML = agent.status === 'waiting'
-        ? '<i class="fi fi-rr-play text-xs"></i><span>Resume</span>'
-        : '<i class="fi fi-rr-pause text-xs"></i><span>Pause</span>';
+      const terminalStatuses = ['completed', 'failed', 'cancelled', 'idle', 'offline'];
+      const isTerminal = terminalStatuses.includes(agent.status);
+      const isWaiting = agent.status === 'waiting';
+      if (isTerminal) {
+        pauseBtn.disabled = true;
+        pauseBtn.classList.add('btn-disabled', 'text-base-content/40');
+        pauseBtn.innerHTML = '<i class="fi fi-rr-pause text-xs"></i><span>N/A</span>';
+        pauseBtn.title = 'Terminal status: cannot pause/resume';
+      } else {
+        pauseBtn.disabled = false;
+        pauseBtn.classList.remove('btn-disabled', 'text-base-content/40');
+        pauseBtn.innerHTML = isWaiting
+          ? '<i class="fi fi-rr-play text-xs"></i><span>Resume</span>'
+          : '<i class="fi fi-rr-pause text-xs"></i><span>Pause</span>';
+        pauseBtn.title = isWaiting ? 'Resume agent' : 'Pause agent';
+      }
     }
   }
 

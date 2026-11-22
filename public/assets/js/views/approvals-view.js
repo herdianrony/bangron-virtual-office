@@ -1,8 +1,27 @@
 import { api } from '../core/api.js';
+import { SkeletonLoader } from '../core/skeleton.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { ConfirmDialog } from '../core/confirm-dialog.js';
+import { showToast } from '../core/toast.js';
+import { approvalEscalationTimer } from '../core/approval-escalation.js';
 
 export class ApprovalsView {
   constructor(container) {
     this.container = container;
+    this.escalationTimer = approvalEscalationTimer;
+  }
+
+  showSkeleton() {
+    this.container.innerHTML = `
+      <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
+          ${SkeletonLoader.skeletonStat()}
+        </div>
+        <div class="space-y-3" id="approvals-list">
+          ${SkeletonLoader.skeletonList(5)}
+        </div>
+      </div>
+    `;
   }
 
   async render() {
@@ -37,6 +56,8 @@ export class ApprovalsView {
 
     this.initEvents();
     await this.loadApprovals('pending');
+    this.escalationTimer.updateApprovals(this.currentApprovals || []);
+    this.escalationTimer.start();
   }
 
   async loadApprovals(filterStatus = 'pending') {
@@ -114,14 +135,17 @@ export class ApprovalsView {
                   <span class="text-base-content/60 block text-[11px]">Timestamp</span>
                   <span class="text-base-content/60 font-mono text-[11px] block">${item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span>
                 </div>
+                <div class="pt-1">
+                  <span class="text-[10px] text-base-content/60 block font-mono">⏱️ Persetujuan menunggu tindakan Director</span>
+                </div>
               </div>
 
-              <!-- Action Payload Collapse Accordion -->
-              <div tabindex="0" class="collapse collapse-arrow bg-base-300/40 border border-base-content/10 rounded-lg text-xs">
-                <div class="collapse-title font-semibold text-base-content/80 py-2 min-h-0 text-xs">
+              <!-- Action Payload Collapse Accordion (Keyboard Accessible) -->
+              <div tabindex="0" role="button" aria-expanded="false" aria-controls="payload-${item.id}" class="collapse collapse-arrow bg-base-300/40 border border-base-content/10 rounded-lg text-xs" data-accordion-id="${item.id}">
+                <div class="collapse-title font-semibold text-base-content/80 py-2 min-h-0 text-xs cursor-pointer">
                   Inspect Parameter Payload & Command Spec
                 </div>
-                <div class="collapse-content">
+                <div class="collapse-content" id="payload-${item.id}" role="region">
                   <pre class="bg-base-300 p-3 rounded-lg text-[11px] font-mono text-primary overflow-x-auto border border-base-content/10 mt-1">${JSON.stringify(payloadObj, null, 2)}</pre>
                 </div>
               </div>
@@ -150,6 +174,8 @@ export class ApprovalsView {
           </div>
         `;
       }).join('');
+      this.currentApprovals = filtered;
+      this.escalationTimer.updateApprovals(filtered);
     } catch (err) {
       console.error('Failed to load approvals:', err);
     }
@@ -183,22 +209,48 @@ export class ApprovalsView {
       const approveBtn = e.target.closest('.btn-approve');
       if (approveBtn) {
         const id = approveBtn.dataset.id;
-        const notes = document.getElementById(`review-notes-${id}`)?.value || 'Approved by Director via console';
-        await api.post(`/api/approvals/${id}/approve`, { notes });
-        await this.loadApprovals('pending');
+        const notesInput = document.getElementById(`review-notes-${id}`);
+        const notes = notesInput?.value || 'Approved by Director via console';
+
+        const confirmed = await ConfirmDialog.ask({
+          title: 'Authorize Execution',
+          message: 'Apakah Anda yakin ingin mengizinkan eksekusi task ini? Pastikan semua parameter sudah dicek.',
+          confirmLabel: 'Ya, Izinkan Eksekusi',
+          cancelLabel: 'Batal',
+          confirmType: 'success',
+          onConfirm: async () => {
+            await api.post(`/api/approvals/${id}/approve`, { notes });
+            await this.loadApprovals('pending');
+            showToast('success', 'Persetujuan Diberikan', 'Task telah diotorisasi untuk dieksekusi.');
+          }
+        });
       }
 
       const rejectBtn = e.target.closest('.btn-reject');
       if (rejectBtn) {
         const id = rejectBtn.dataset.id;
-        const notes = document.getElementById(`review-notes-${id}`)?.value || 'Rejected by Director via console';
-        await api.post(`/api/approvals/${id}/reject`, { notes });
-        await this.loadApprovals('pending');
+        const notesInput = document.getElementById(`review-notes-${id}`);
+        const notes = notesInput?.value || 'Rejected by Director via console';
+
+        const confirmed = await ConfirmDialog.ask({
+          title: 'Reject Approval',
+          message: 'Apakah Anda yakin ingin menolak persetujuan ini? Tindakan akan mencegah eksekusi task terkait.',
+          confirmLabel: 'Ya, Tolak Persetujuan',
+          cancelLabel: 'Batal',
+          confirmType: 'error',
+          onConfirm: async () => {
+            await api.post(`/api/approvals/${id}/reject`, { notes });
+            await this.loadApprovals('pending');
+            showToast('warning', 'Persetujuan Ditolak', 'Approval telah ditolak oleh Director.');
+          }
+        });
       }
     });
   }
 
-  destroy() {}
+  destroy() {
+    this.escalationTimer.stop();
+  }
 }
 
 export default ApprovalsView;

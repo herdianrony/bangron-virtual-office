@@ -1,11 +1,43 @@
 import { api } from '../core/api.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { SkeletonLoader } from '../core/skeleton.js';
 
 export class DashboardView {
   constructor(container) {
     this.container = container;
   }
 
+  showSkeleton() {
+    this.container.innerHTML = `
+      <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <!-- Skeleton Stats Row -->
+        <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
+          ${SkeletonLoader.skeletonStat()}
+        </div>
+        <!-- Skeleton Tables -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="card bg-base-200 border border-base-content/10 shadow-xl">
+            <div class="card-body">
+              <div class="loading loading-bar h-5 w-1/4 mb-4"></div>
+              ${SkeletonLoader.skeletonTable(4, 3)}
+            </div>
+          </div>
+          <div class="card bg-base-200 border border-base-content/10 shadow-xl">
+            <div class="card-body">
+              <div class="loading loading-bar h-5 w-1/4 mb-4"></div>
+              ${SkeletonLoader.skeletonTable(4, 3)}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   async render() {
+    // Show skeleton immediately for perceived performance
+    this.showSkeleton();
+    await new Promise(r => setTimeout(r, 50)); // Allow DOM to render skeleton
+
     this.container.innerHTML = `
       <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <!-- Dashboard Header -->

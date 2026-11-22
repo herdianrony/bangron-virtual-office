@@ -60,8 +60,9 @@ export function normalizeHermesEvent(rawEvent) {
   // - timestamp (native Hermes field) wins over occurred_at when both are present.
   //   This matches the validator's precedence so freshness validation and
   //   persisted timestamp are identical.
-  // - Supported formats: unix seconds, unix milliseconds, ISO-8601 with zone
-  //   (the native Hermes outbound-webhook format). See event-timestamp.js.
+  // - Supported formats: unix seconds (integer or fractional, e.g. the native
+  //   Hermes SSE API Server format 1795242296.5631661), unix milliseconds,
+  //   ISO-8601 with zone. See event-timestamp.js.
   // - Missing timestamp → ingest time (internal/demo/SSE paths; the /events
   //   webhook gate already requires a signed timestamp before normalization).
   // - Invalid timestamp → throw (controller answers 400 MALFORMED_EVENT).

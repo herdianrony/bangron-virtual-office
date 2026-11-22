@@ -15,6 +15,15 @@ export class AgentController {
     }
   };
 
+  getCapabilities = (req, res) => {
+    try {
+      const data = this.agentService.getCapabilities();
+      return sendSuccess(res, data);
+    } catch (err) {
+      return sendError(res, 'CAPABILITIES_FETCH_ERROR', err.message, [], 500);
+    }
+  };
+
   getById = (req, res) => {
     try {
       const agent = this.agentService.getById(req.params.id);

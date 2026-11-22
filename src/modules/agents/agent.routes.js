@@ -6,6 +6,7 @@ import { requireDirector } from '../../middleware/authorization.js';
 const router = Router();
 
 router.get('/', authenticate, agentController.getAll);
+router.get('/capabilities', authenticate, agentController.getCapabilities);
 router.get('/:id', authenticate, agentController.getById);
 router.post('/', authenticate, requireDirector, agentController.createProfile);
 router.patch('/:id', authenticate, requireDirector, agentController.updateProfile);

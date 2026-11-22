@@ -1,4 +1,5 @@
 import { api } from '../core/api.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
 
 export class DeliverablesView {
   constructor(container) {
@@ -51,7 +52,8 @@ export class DeliverablesView {
       if (!tbody) return;
 
       if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-base-content/50 py-6">No deliverables logged yet. Complete tasks to produce assets.</td></tr>`;
+        const container = document.getElementById('deliverables-table-body');
+        EmptyState.show(container.parentElement, EmptyStatePresets.noDeliverables);
         return;
       }
 

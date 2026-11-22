@@ -1,4 +1,6 @@
 import { api } from '../core/api.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { showToast } from '../core/toast.js';
 
 export class ProjectsView {
   constructor(container) {
@@ -87,7 +89,7 @@ export class ProjectsView {
       if (!grid) return;
 
       if (projects.length === 0) {
-        grid.innerHTML = `<div class="text-base-content/50 text-xs py-8 text-center col-span-full">No studio projects created yet.</div>`;
+        EmptyState.show(grid, EmptyStatePresets.noProjects);
         return;
       }
 
@@ -160,10 +162,10 @@ export class ProjectsView {
         });
 
         modal?.close();
-        alert('Project launched successfully!');
+        if (typeof showToast !== 'undefined') showToast('success', 'Project launched!', 'Studio project created successfully.'); else alert('Project launched successfully!');
         await this.loadProjects();
       } catch (err) {
-        alert('Failed to create project: ' + err.message);
+        if (typeof showToast !== 'undefined') showToast('error', 'Project Failed', err.message); else alert('Failed to create project: ' + err.message);
       }
     });
   }

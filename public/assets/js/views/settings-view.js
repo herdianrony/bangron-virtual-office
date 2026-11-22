@@ -1,4 +1,5 @@
 import { api } from '../core/api.js';
+import { themeManager } from '../core/theme-manager.js';
 
 export class SettingsView {
   constructor(container) {
@@ -104,6 +105,31 @@ export class SettingsView {
                   </div>
                 </label>
               </div>
+
+              <div class="form-control pt-4 border-t border-base-content/10">
+                <label class="cursor-pointer label justify-start gap-3">
+                  <div class="flex items-center gap-2 flex-1">
+                    <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <i class="fi fi-rr-moon text-xl"></i>
+                    </div>
+                    <div>
+                      <strong class="text-sm text-base-content block">System Theme Detection</strong>
+                      <span class="text-xs text-base-content/60">Follows OS preference (prefers-color-scheme) with manual override.</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2" id="theme-toggle-container">
+                    <span class="text-xs text-base-content/60" id="theme-current">System</span>
+                    <button class="btn btn-ghost btn-sm" id="btn-theme-toggle" title="Toggle theme">
+                      <i class="fi fi-rr-sun text-base"></i>
+                    </button>
+                    <select class="select select-bordered select-sm w-auto bg-base-100 text-base-content border-base-content/20" id="theme-select" aria-label="Theme preference">
+                      <option value="system">System</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -155,6 +181,9 @@ export class SettingsView {
   }
 
   initEvents() {
+    // Theme toggle
+    this.initThemeToggle();
+
     document.getElementById('btn-toggle-secret')?.addEventListener('click', (e) => {
       const input = document.getElementById('webhook-secret-input');
       if (input.type === 'password') {
@@ -177,6 +206,50 @@ export class SettingsView {
         alert('Virtual office demo state successfully reset.');
       }
     });
+  }
+
+  initThemeToggle() {
+    // Initialize from themeManager
+    const select = document.getElementById('theme-select');
+    const currentEl = document.getElementById('theme-current');
+    const btn = document.getElementById('btn-theme-toggle');
+    const icon = btn?.querySelector('i');
+
+    if (select) {
+      select.value = themeManager.currentTheme;
+      select.addEventListener('change', (e) => {
+        themeManager.setTheme(e.target.value);
+        this.updateThemeUI();
+      });
+    }
+
+    if (btn) {
+      btn.addEventListener('click', () => {
+        themeManager.toggleTheme();
+        this.updateThemeUI();
+      });
+    }
+
+    // Subscribe to theme changes
+    themeManager.subscribe(() => this.updateThemeUI());
+    this.updateThemeUI();
+  }
+
+  updateThemeUI() {
+    const select = document.getElementById('theme-select');
+    const currentEl = document.getElementById('theme-current');
+    const btn = document.getElementById('btn-theme-toggle');
+    const icon = btn?.querySelector('i');
+
+    const effective = themeManager.getEffectiveTheme();
+    const current = themeManager.currentTheme;
+
+    if (select) select.value = current;
+    if (currentEl) currentEl.innerText = current === 'system' ? `System (${effective})` : effective.charAt(0).toUpperCase() + effective.slice(1);
+    if (icon) {
+      icon.className = effective === 'dark' ? 'fi fi-rr-sun text-base' : 'fi fi-rr-moon text-base';
+    }
+    if (btn) btn.title = `Current: ${effective}. Click to toggle.`;
   }
 
   destroy() {}

@@ -52,7 +52,7 @@ export function createApp(customDb = null) {
         baseUri: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-eval'"], // 'unsafe-eval' diperlukan PixiJS v8 (new Function). Inline script tetap diblokir (tanpa 'unsafe-inline').
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         connectSrc: ["'self'", 'ws:', 'wss:']

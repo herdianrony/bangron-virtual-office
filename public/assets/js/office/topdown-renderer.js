@@ -757,7 +757,69 @@ export class TopdownRenderer {
       ${this.renderCorridors(corridors)}
       ${this.renderWalls(rooms, corridors)}
       ${this.renderRooms(rooms)}
+      ${this.renderHitTestLayer(rooms, corridors)}
     `;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Hit-Test Layer (invisible shapes for room/furniture/decor clicks)   */
+  /* ------------------------------------------------------------------ */
+
+  renderHitTestLayer(rooms = [], corridors = []) {
+    const roomsHit = rooms.map((room) => {
+      const { id, name, position_x: px, position_y: py, width: w, height: h, department } = room;
+      return `<rect class="td-hit-test-room" x="${px + 1}" y="${py + 1}" width="${w - 2}" height="${h - 2}" rx="2" data-name="${esc(name)} — ${esc(department || 'General')}" pointer-events="all"/>`;
+    }).join('\n');
+
+    const corridorsHit = (corridors && corridors.length ? corridors : DEFAULT_CORRIDORS).map((c) => {
+      return `<rect class="td-hit-test-corridor" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" data-name="Koridor ${c.id}" pointer-events="all"/>`;
+    }).join('\n');
+
+    // Note: Furniture/decor hit-test will be added via separate method for dynamic workstations
+    return `<g id="hit-test-layer" pointer-events="all" style="display: none;">\n${roomsHit}\n${corridorsHit}\n</g>`;
+  }
+
+  /* Helper: render hit-test shapes for furniture/workstations.
+   * Workstation API records expose anchor positions, not width/height.
+   * Derive hit areas from each furniture glyph to keep SVG geometry valid.
+   */
+  renderFurnitureHitTest(workstations = []) {
+    // Workstations from /api/virtual-office/state carry position_x, position_y,
+    // capacity, workstation_type — but NOT width/height. Derive hit areas from
+    // the actual furniture geometry per type so SVG rect attributes are always
+    // valid numbers (never "undefined").
+    const hitGeometry = {
+      terminal: { w: 34, h: 50, offsetY: -33 },
+      conference_table: { w: 112, h: 72, offsetY: 0 },
+      couch: { w: 64, h: 36, offsetY: -6 },
+      command_pod: { w: 48, h: 48, offsetY: -6 },
+      reception: { w: 56, h: 36, offsetY: -8 },
+      library_table: { w: 88, h: 56, offsetY: -12 },
+      coffee_bar: { w: 84, h: 54, offsetY: -12 },
+      executive_desk: { w: 64, h: 42, offsetY: -14 },
+      qa_bench: { w: 52, h: 38, offsetY: -14 },
+      design_bench: { w: 52, h: 38, offsetY: -14 },
+      creative_bench: { w: 52, h: 38, offsetY: -14 },
+      bench: { w: 52, h: 38, offsetY: -14 },
+      desk: { w: 50, h: 38, offsetY: -14 },
+      dev_desk: { w: 50, h: 38, offsetY: -14 }
+    };
+
+    return workstations.map((ws) => {
+      const px = ws.position_x;
+      const py = ws.position_y;
+      // Skip workstations with missing/null coordinates — rendering them at
+      // (0,0) would silently misplace furniture and produce misleading hit areas.
+      if (px == null || py == null) return '';
+      const pxNum = Number(px);
+      const pyNum = Number(py);
+      if (!Number.isFinite(pxNum) || !Number.isFinite(pyNum)) return '';
+
+      const type = ws.workstation_type || 'desk';
+      const { w, h, offsetY } = hitGeometry[type] || hitGeometry.desk;
+      const label = `${ws.name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[type] || 'Furnitur kantor'}`;
+      return `<rect class="td-hit-test-furniture" x="${pxNum - w / 2}" y="${pyNum + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
+    }).filter(Boolean).join('\n');
   }
 }
 

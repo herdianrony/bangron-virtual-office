@@ -208,6 +208,42 @@ async function cleanupAgent(context, page, agentId, taskId) {
 /* ------------------------------------------------------------------ */
 
 test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
+  test('office animation and SVG geometry render without runtime errors', async ({ page }) => {
+    const pageErrors = [];
+    const svgGeometryErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const text = message.text();
+      if (/\b<rect> attribute (?:width|height): Expected length/.test(text)) {
+        svgGeometryErrors.push(text);
+      }
+    });
+
+    await loginAsDirector(page);
+    await expect(page.locator('#office-svg-canvas')).toBeVisible();
+
+    // Exercise multiple animation frames and inspect the rendered hit-test
+    // rectangles backed by API workstation records (which have no dimensions).
+    await page.waitForFunction(() => {
+      const nodes = document.querySelectorAll('#hit-test-layer .td-hit-test-furniture');
+      return nodes.length > 0;
+    }, null, { timeout: 15000 });
+    expect(pageErrors).toEqual([]);
+    expect(svgGeometryErrors).toEqual([]);
+    const furnitureHitAreas = await page.locator('#hit-test-layer .td-hit-test-furniture').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        width: Number(node.getAttribute('width')),
+        height: Number(node.getAttribute('height'))
+      }))
+    );
+    expect(furnitureHitAreas.length).toBeGreaterThan(0);
+    expect(furnitureHitAreas.every((area) =>
+      Number.isFinite(area.width) && area.width > 0 &&
+      Number.isFinite(area.height) && area.height > 0
+    )).toBe(true);
+  });
+
   test('office page loads and renders agents', async ({ page }) => {
     await loginAsDirector(page);
     await expect(page).toHaveTitle(/Bangron Virtual Office/);
@@ -264,6 +300,7 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
 
 test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
   test('director login → task assign → queued → working → completed → idle', async ({ page, context }) => {
+    test.setTimeout(60000); // Full lifecycle: login + API + WS + Hermes webhook chain
     await loginAsDirector(page);
     const agentId = AGENT.success;
 
@@ -427,6 +464,7 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
   });
 
   test('browser refresh restores authoritative snapshot', async ({ page, context }) => {
+    test.setTimeout(60000); // Page refresh + snapshot restore chain
     await loginAsDirector(page);
     const agentId = AGENT.refresh;
 
@@ -454,4 +492,27 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
 
     await cleanupAgent(context, page, agentId, taskId);
   });
+  test('tasks view loads capabilities and contains no inline event handlers', async ({ page }) => {
+    const cspAttributeViolations = [];
+    page.on('console', (message) => {
+      if (/script-src-attr/.test(message.text())) cspAttributeViolations.push(message.text());
+    });
+
+    await loginAsDirector(page);
+    const capabilitiesResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/agents/capabilities')
+    );
+
+    await page.goto('/tasks#/tasks');
+    const response = await capabilitiesResponse;
+    expect(response.status()).toBe(200);
+    await page.waitForSelector('#tasks-table-body', { timeout: 15000 });
+
+    const inlineHandlerCount = await page.evaluate(() =>
+      document.querySelectorAll('[onclick], [onchange], [onsubmit], [oninput]').length
+    );
+    expect(inlineHandlerCount).toBe(0);
+    expect(cspAttributeViolations).toEqual([]);
+  });
+
 });

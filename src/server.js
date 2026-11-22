@@ -1,4 +1,5 @@
 import http from 'http';
+import { pathToFileURL } from 'url';
 import { createApp } from './app.js';
 import { appConfig } from './config/index.js';
 import { getDatabase, closeDatabase } from './database/connection.js';
@@ -7,8 +8,13 @@ import { createWebSocketServer } from './realtime/websocket-server.js';
 import { demoEngine } from './modules/demo/demo-engine.js';
 import { HermesAdapter } from './integrations/hermes/adapter.js';
 import { AgentRepository } from './database/repositories/agent.repository.js';
+import { hermesEventBridge } from './integrations/hermes/event-bridge.js';
+import { recoverActiveHermesRuns } from './integrations/hermes/startup-recovery.js';
 import { eventPublisher } from './realtime/event-publisher.js';
 import logger from './utils/logger.js';
+
+// Backwards-compatible re-export: konsumen lama boleh mengimpor dari server.js.
+export { recoverActiveHermesRuns } from './integrations/hermes/startup-recovery.js';
 
 const RUNTIME_CHECK_INTERVAL_MS = 30000;
 
@@ -23,7 +29,7 @@ async function startServer() {
     // Attach WebSocket Server
     const wss = createWebSocketServer(server, sessionStore);
 
-    server.listen(appConfig.port, appConfig.host, () => {
+    server.listen(appConfig.port, appConfig.host, async () => {
       logger.info(
         `Bangron Virtual Office running on http://${appConfig.host}:${appConfig.port} in ${appConfig.env} mode`
       );
@@ -31,6 +37,15 @@ async function startServer() {
       // Start the DEMO auto-play director unless explicitly disabled.
       if (process.env.DEMO_AUTOPLAY !== 'false') {
         demoEngine.start();
+      }
+
+      // G6.1: EventBridge startup recovery for active Hermes runs
+      // Query tasks with non-empty hermes_run_id and non-terminal status,
+      // rebuild run-to-task mappings, and resume polling.
+      try {
+        await recoverActiveHermesRuns(db);
+      } catch (err) {
+        logger.error({ err }, 'Hermes EventBridge startup recovery failed');
       }
 
       // PHASE 3: Runtime health watchdog.
@@ -85,6 +100,9 @@ async function startServer() {
 
       demoEngine.stop();
 
+      // G6.1: Stop all EventBridge polling on shutdown
+      hermesEventBridge.stopAll();
+
       wss.close(() => {
         logger.info('WebSocket server closed.');
       });
@@ -110,4 +128,22 @@ async function startServer() {
   }
 }
 
-startServer();
+/**
+ * True hanya jika modul ini dijalankan langsung (node src/server.js),
+ * bukan diimpor sebagai dependensi (mis. dari test).
+ *
+ * Tanpa guard ini, import ke src/server.js akan mengeksekusi startServer()
+ * dan merebut port produksi (EADDRINUSE saat service hidup).
+ */
+export function isDirectRun(
+  importMetaUrl = import.meta.url,
+  entryPoint = process.argv[1]
+) {
+  if (!entryPoint) return false;
+  return importMetaUrl === pathToFileURL(entryPoint).href;
+}
+
+if (isDirectRun()) {
+  startServer();
+}
+

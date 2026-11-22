@@ -20,8 +20,10 @@ export class StateReconciler {
     this.provisioner = new HermesAgentProvisioner(this.db);
     // Wire format resmi Outbound Webhooks Hermes TIDAK membawa identitas agen
     // eksplisit (hanya session_id + nama profile). Gunakan rantai resolusi:
-    // instance eksplisit → session yang dikenal → map profil → instance default.
-    this.defaultInstanceId = process.env.HERMES_DEFAULT_AGENT_ID || 'inst_demo_hermes';
+    // instance eksplisit → session yang dikenal → map profil → auto-provision.
+    // NO implicit fallback to demo agent for live Hermes events.
+    // HERMES_DEFAULT_AGENT_ID must be explicitly set if a fallback is desired.
+    this.defaultInstanceId = process.env.HERMES_DEFAULT_AGENT_ID || null;
     try {
       this.profileAgentMap = process.env.HERMES_PROFILE_AGENT_MAP
         ? JSON.parse(process.env.HERMES_PROFILE_AGENT_MAP)
@@ -105,10 +107,13 @@ export class StateReconciler {
           instance_id = provisioned.id;
         }
       }
+      // NO implicit fallback to demo agent for live Hermes events.
+      // Only use explicitly configured HERMES_DEFAULT_AGENT_ID if set.
       if (!instance_id && this.defaultInstanceId && this.agentRepo.getInstanceById(this.defaultInstanceId)) {
         instance_id = this.defaultInstanceId;
+        logger.info({ defaultInstanceId: this.defaultInstanceId }, 'Using explicitly configured default agent instance');
       } else if (!instance_id && (event.profile || event.agent_id)) {
-        logger.warn({ profile: event.profile, agentId: event.agent_id }, 'Auto-provision gagal dan default instance tidak ada');
+        logger.warn({ profile: event.profile, agentId: event.agent_id }, 'Auto-provision failed and no explicit default instance configured; event will be recorded but no agent state updated');
       }
     }
     if (task_id && !this.taskRepo.getTaskById(task_id)) {
@@ -222,10 +227,15 @@ export class StateReconciler {
         eventPublisher.publishAgentStatus(instance_id, 'working');
       }
 
-      if (task_id) {
+      // Only mark task running if agent identity was resolved.
+      // Without a known instance, we cannot confirm an agent is executing.
+      if (task_id && instance_id) {
         this.taskRepo.updateTaskStatus(task_id, 'running');
         const task = this.taskRepo.getTaskById(task_id);
         eventPublisher.publishTaskStatus(task);
+      } else if (task_id && !instance_id) {
+        logger.warn({ taskId: task_id, eventId: event.event_id },
+          'Execution started but no agent identity resolved; task status unchanged');
       }
 
       this._recordActivity({
