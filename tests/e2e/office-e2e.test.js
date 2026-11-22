@@ -215,7 +215,7 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
     page.on('console', (message) => {
       if (message.type() !== 'error') return;
       const text = message.text();
-      if (/\\b<rect> attribute (?:width|height): Expected length/.test(text)) {
+      if (/\b<rect> attribute (?:width|height): Expected length/.test(text)) {
         svgGeometryErrors.push(text);
       }
     });
