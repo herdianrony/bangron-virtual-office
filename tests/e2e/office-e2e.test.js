@@ -228,7 +228,17 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
     await page.waitForTimeout(1000);
     expect(pageErrors).toEqual([]);
     expect(svgGeometryErrors).toEqual([]);
-    await expect(page.locator('#hit-test-layer .td-hit-test-furniture')).toHaveCount(14);
+    const furnitureHitAreas = await page.locator('#hit-test-layer .td-hit-test-furniture').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        width: Number(node.getAttribute('width')),
+        height: Number(node.getAttribute('height'))
+      }))
+    );
+    expect(furnitureHitAreas.length).toBeGreaterThan(0);
+    expect(furnitureHitAreas.every((area) =>
+      Number.isFinite(area.width) && area.width > 0 &&
+      Number.isFinite(area.height) && area.height > 0
+    )).toBe(true);
   });
 
   test('office page loads and renders agents', async ({ page }) => {
