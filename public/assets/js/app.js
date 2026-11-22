@@ -41,7 +41,7 @@ class App {
     }
 
     // 0b. Initialize Theme Manager (system detection + override)
-    import('../core/theme-manager.js').then(({ themeManager }) => {
+    import('./core/theme-manager.js').then(({ themeManager }) => {
       themeManager.init();
       window.themeManager = themeManager;
     });
