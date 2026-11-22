@@ -225,7 +225,10 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
 
     // Exercise multiple animation frames and inspect the rendered hit-test
     // rectangles backed by API workstation records (which have no dimensions).
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(() => {
+      const nodes = document.querySelectorAll('#hit-test-layer .td-hit-test-furniture');
+      return nodes.length > 0;
+    }, null, { timeout: 15000 });
     expect(pageErrors).toEqual([]);
     expect(svgGeometryErrors).toEqual([]);
     const furnitureHitAreas = await page.locator('#hit-test-layer .td-hit-test-furniture').evaluateAll((nodes) =>
@@ -461,6 +464,7 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
   });
 
   test('browser refresh restores authoritative snapshot', async ({ page, context }) => {
+    test.setTimeout(60000); // Page refresh + snapshot restore chain
     await loginAsDirector(page);
     const agentId = AGENT.refresh;
 

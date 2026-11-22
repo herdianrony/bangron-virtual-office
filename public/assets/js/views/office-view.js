@@ -225,6 +225,9 @@ export class OfficeView {
       // Render static layers for the active view mode
       this.renderStaticLayers();
 
+      // Add furniture hit-test shapes now that workstations are loaded
+      this.addFurnitureHitTest();
+
       // Sync agents to movement engine
       store.setAgents(state.agents);
       movementEngine.syncAgents(state.agents);

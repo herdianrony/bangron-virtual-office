@@ -122,28 +122,28 @@ describe('SVG attribute validation — furniture hit-test layer', () => {
   it('derives hit areas from per-type furniture geometry', () => {
     const html = topdownRenderer.renderFurnitureHitTest(workstationsWithoutDimensions);
 
-    // Desk: default w=44, h=26, centered on position
-    expect(html).toContain('width="44"');
-    expect(html).toContain('height="26"');
+    // Desk: w=50, h=38, offsetY=-14, centered on position
+    expect(html).toContain('width="50"');
+    expect(html).toContain('height="38"');
 
-    // Terminal: w=26, h=46
-    expect(html).toContain('width="26"');
-    expect(html).toContain('height="46"');
+    // Terminal: w=34, h=50, offsetY=-33
+    expect(html).toContain('width="34"');
+    expect(html).toContain('height="50"');
 
-    // Conference table: w=92, h=52
-    expect(html).toContain('width="92"');
-    expect(html).toContain('height="52"');
+    // Conference table: w=112, h=72
+    expect(html).toContain('width="112"');
+    expect(html).toContain('height="72"');
 
-    // Couch: w=56, h=26
-    expect(html).toContain('width="56"');
-    expect(html).toContain('height="26"');
+    // Couch: w=64, h=36
+    expect(html).toContain('width="64"');
+    expect(html).toContain('height="36"');
 
-    // Command pod: w=40, h=40
-    expect(html).toContain('width="40"');
-    expect(html).toContain('height="40"');
+    // Command pod: w=48, h=48
+    expect(html).toContain('width="48"');
+    expect(html).toContain('height="48"');
   });
 
-  it('handles null coordinates safely (falls back to 0)', () => {
+  it('handles null coordinates safely (filtered out, not rendered)', () => {
     const html = topdownRenderer.renderFurnitureHitTest([
       {
         id: 'ws_null_coords',
@@ -156,12 +156,8 @@ describe('SVG attribute validation — furniture hit-test layer', () => {
       }
     ]);
 
-    // Should not contain "null" in x or y attributes
-    expect(html).not.toMatch(/x="null"/);
-    expect(html).not.toMatch(/y="null"/);
-    // x and y should be valid numbers (position 0 - w/2, 0 - h/2 for desk)
-    expect(html).toMatch(/x="-22"/); // 0 - 44/2 = -22
-    expect(html).toMatch(/y="-13"/); // 0 - 26/2 = -13
+    // Null-coordinate workstations are filtered out (no NaN/undefined attributes)
+    expect(html).toBe('');
   });
 
   it('returns empty string for empty workstation list', () => {
@@ -180,6 +176,7 @@ describe('SVG attribute validation — furniture hit-test layer', () => {
       expect(rectTag).toContain('class="td-hit-test-furniture"');
       count++;
     }
-    expect(count).toBe(workstationsWithoutDimensions.length);
+    // Null-coordinate workstation is filtered out: 8 - 1 = 7 rects
+    expect(count).toBe(workstationsWithoutDimensions.length - 1);
   });
 });

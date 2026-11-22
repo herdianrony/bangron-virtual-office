@@ -806,14 +806,19 @@ export class TopdownRenderer {
     };
 
     return workstations.map((ws) => {
-      const px = Number(ws.position_x);
-      const py = Number(ws.position_y);
-      if (!Number.isFinite(px) || !Number.isFinite(py)) return '';
+      const px = ws.position_x;
+      const py = ws.position_y;
+      // Skip workstations with missing/null coordinates — rendering them at
+      // (0,0) would silently misplace furniture and produce misleading hit areas.
+      if (px == null || py == null) return '';
+      const pxNum = Number(px);
+      const pyNum = Number(py);
+      if (!Number.isFinite(pxNum) || !Number.isFinite(pyNum)) return '';
 
       const type = ws.workstation_type || 'desk';
       const { w, h, offsetY } = hitGeometry[type] || hitGeometry.desk;
       const label = `${ws.name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[type] || 'Furnitur kantor'}`;
-      return `<rect class="td-hit-test-furniture" x="${px - w / 2}" y="${py + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
+      return `<rect class="td-hit-test-furniture" x="${pxNum - w / 2}" y="${pyNum + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
     }).filter(Boolean).join('\n');
   }
 }
