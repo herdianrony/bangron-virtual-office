@@ -779,15 +779,39 @@ export class TopdownRenderer {
     return `<g id="hit-test-layer" pointer-events="all" style="display: none;">\n${roomsHit}\n${corridorsHit}\n</g>`;
   }
 
-  /* Helper: render hit-test shapes for furniture/workstations */
+  /* Helper: render hit-test shapes for furniture/workstations.
+   * Workstation API records expose anchor positions, not width/height.
+   * Derive hit areas from each furniture glyph to keep SVG geometry valid.
+   */
   renderFurnitureHitTest(workstations = []) {
+    const hitGeometry = {
+      terminal: { w: 34, h: 50, offsetY: -33 },
+      conference_table: { w: 112, h: 72, offsetY: 0 },
+      couch: { w: 64, h: 36, offsetY: -6 },
+      command_pod: { w: 48, h: 48, offsetY: -6 },
+      reception: { w: 56, h: 36, offsetY: -8 },
+      library_table: { w: 88, h: 56, offsetY: -12 },
+      coffee_bar: { w: 84, h: 54, offsetY: -12 },
+      executive_desk: { w: 64, h: 42, offsetY: -14 },
+      qa_bench: { w: 52, h: 38, offsetY: -14 },
+      design_bench: { w: 52, h: 38, offsetY: -14 },
+      creative_bench: { w: 52, h: 38, offsetY: -14 },
+      bench: { w: 52, h: 38, offsetY: -14 },
+      desk: { w: 50, h: 38, offsetY: -14 },
+      dev_desk: { w: 50, h: 38, offsetY: -14 }
+    };
+
     return workstations.map((ws) => {
-      const { id, name, position_x: px, position_y: py, width: w, height: h, workstation_type } = ws;
-      const label = `${name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[workstation_type] || 'Furnitur kantor'}`;
-      return `<rect class="td-hit-test-furniture" x="${px}" y="${py}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
-    }).join('\n');
-  }
-}
+      const px = Number(ws.position_x);
+      const py = Number(ws.position_y);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return '';
+
+      const type = ws.workstation_type || 'desk';
+      const { w, h, offsetY } = hitGeometry[type] || hitGeometry.desk;
+      const label = `${ws.name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[type] || 'Furnitur kantor'}`;
+      return `<rect class="td-hit-test-furniture" x="${px - w / 2}" y="${py + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
+    }).filter(Boolean).join('\\n');
+  }}
 
 export const topdownRenderer = new TopdownRenderer();
 export default topdownRenderer;
