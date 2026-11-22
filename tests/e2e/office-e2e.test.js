@@ -208,6 +208,18 @@ async function cleanupAgent(context, page, agentId, taskId) {
 /* ------------------------------------------------------------------ */
 
 test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
+  test('office animation frame runs without uncaught runtime errors', async ({ page }) => {
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await loginAsDirector(page);
+    await expect(page.locator('#office-svg-canvas')).toBeVisible();
+
+    // Exercise multiple animation frames so callback/runtime exceptions surface.
+    await page.waitForTimeout(1000);
+    expect(pageErrors).toEqual([]);
+  });
+
   test('office page loads and renders agents', async ({ page }) => {
     await loginAsDirector(page);
     await expect(page).toHaveTitle(/Bangron Virtual Office/);
