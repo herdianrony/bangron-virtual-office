@@ -223,7 +223,7 @@ const RESUMABLE_STATUSES = ['waiting'];
 | P3.1 | PWA: Service Worker, manifest.json, offline caching |
 | P3.2 | Command Palette: `Cmd/Ctrl+K` for navigation, actions |
 | P3.3 | Bulk Actions: Multi-select on tasks/agents grid |
-| P3.4 | Approval Escalation Timer: Auto-reject after 24h |
+| P3.4 | Approval Escalation Timer: informational 24h countdown only; no automatic rejection |
 | P3.5 | System Theme Detection: `prefers-color-scheme` |
 | P3.6 | Accessibility Audit: ARIA labels, focus trapping, color contrast |
 | P3.7 | Performance: Virtual scrolling for 100+ agents/tasks |
@@ -288,4 +288,6 @@ All view files updated to use ToastService
 
 ---
 
-**Next Action:** Director review → approve PR #3 → proceed to live Hermes runtime verification (Gate G6).
+**Verification status (2026-11-22):** Implementation tracking is complete, but PR acceptance is NOT complete until the full GitHub Actions suite passes. CI run `44946318480` failed in Playwright E2E (8 passed, 14 failed); remediation is in progress. The approval countdown is informational only; client-side auto-rejection is disabled. Gate G6 remains OPEN.
+
+**Next Action:** Resolve E2E failures, obtain a fully green CI run, then request Director review. Do not merge or activate live Hermes runtime as part of this remediation.
