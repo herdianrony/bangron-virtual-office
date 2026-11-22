@@ -492,4 +492,27 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
 
     await cleanupAgent(context, page, agentId, taskId);
   });
+  test('tasks view loads capabilities and contains no inline event handlers', async ({ page }) => {
+    const cspAttributeViolations = [];
+    page.on('console', (message) => {
+      if (/script-src-attr/.test(message.text())) cspAttributeViolations.push(message.text());
+    });
+
+    await loginAsDirector(page);
+    const capabilitiesResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/agents/capabilities')
+    );
+
+    await page.goto('/tasks#/tasks');
+    const response = await capabilitiesResponse;
+    expect(response.status()).toBe(200);
+    await page.waitForSelector('#tasks-table-body', { timeout: 15000 });
+
+    const inlineHandlerCount = await page.evaluate(() =>
+      document.querySelectorAll('[onclick], [onchange], [onsubmit], [oninput]').length
+    );
+    expect(inlineHandlerCount).toBe(0);
+    expect(cspAttributeViolations).toEqual([]);
+  });
+
 });
