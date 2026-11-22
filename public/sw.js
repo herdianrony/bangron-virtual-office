@@ -75,7 +75,7 @@ async function networkFirstThenCache(request, cacheName) {
     const response = await fetch(request);
     if (response.ok && !response.headers.has('set-cookie')) {
       const cacheControl = response.headers.get('cache-control') || '';
-      if (!/\\b(private|no-store)\\b/i.test(cacheControl)) {
+      if (!/\b(private|no-store)\b/i.test(cacheControl)) {
         const headers = new Headers(response.headers);
         headers.set('sw-cached-at', String(Date.now()));
         const body = await response.clone().blob();
@@ -188,7 +188,7 @@ self.addEventListener('message', (event) => {
       caches.delete(CACHE_NAME), caches.delete(API_CACHE_NAME)
     ]));
   }
-  if (event.data === 'logout') {
+  if (event.data === 'logout' || event.data?.type === 'logout') {
     event.waitUntil(caches.delete(API_CACHE_NAME));
   }
 });
