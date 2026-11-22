@@ -91,7 +91,9 @@ export class LoginView {
         if (res && res.user) {
           if (res.csrfToken) {
             api.setCsrfToken(res.csrfToken);
+            store.setState({ csrfToken: res.csrfToken });
           }
+          store.setState({ user: res.user });
           // Restore previous view hash without full page reload
           const preLoginHash = sessionStorage.getItem('preLoginHash') || '#/office';
           sessionStorage.removeItem('preLoginHash');
