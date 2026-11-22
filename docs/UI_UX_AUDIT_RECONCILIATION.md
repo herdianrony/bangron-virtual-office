@@ -1,7 +1,7 @@
 # Bangron Virtual Office — UI/UX Audit Reconciliation (Final Correction)
 
 **Branch:** `fix/g6-hermes-eventbridge`
-**Commit SHA (HEAD):** `ec0e21e89cacec64e2d853c04aa323a0629ec6e7` (latest on branch)
+**Commit SHA (HEAD):** Refer to the live head SHA shown in PR #3; this document is intentionally not pinned to a commit that becomes stale after documentation-only commits.
 **Audited HEAD (original):** `de22da5e89e1bc8359612012252b983184b3ba0e`
 **Date:** 2026-11-22
 **Auditor:** Hermes Main Agent
