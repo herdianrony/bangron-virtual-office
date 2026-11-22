@@ -264,6 +264,7 @@ test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
 
 test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
   test('director login → task assign → queued → working → completed → idle', async ({ page, context }) => {
+    test.setTimeout(60000); // Full lifecycle: login + API + WS + Hermes webhook chain
     await loginAsDirector(page);
     const agentId = AGENT.success;
 

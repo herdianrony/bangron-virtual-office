@@ -178,8 +178,11 @@ export class OfficeView {
     // Load State from Backend API
     await this.loadInitialOfficeState();
 
-    // Start movement engine
-    movementEngine.setUpdateCallback((agents) => {
+    // Start movement engine. The callback receives (agents, deltaSec) from
+    // MovementEngine.tick(); deltaSec is the elapsed seconds since the last
+    // frame and is required by CameraController.updateFollow() for time-based
+    // lerp smoothing. Without it, dt is ReferenceError'd and animation dies.
+    movementEngine.setUpdateCallback((agents, dt) => {
       this.renderAvatars(agents);
       this.camera.updateFollow(agents, dt);
     });
