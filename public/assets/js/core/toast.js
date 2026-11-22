@@ -101,3 +101,8 @@ export class ToastService {
 
 export const toast = new ToastService();
 export default toast;
+
+// Convenience named export for views that import showToast directly
+export function showToast(type, message, options = {}) {
+  return toast.createToast(type, message, options);
+}
