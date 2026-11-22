@@ -1,5 +1,7 @@
 import { api } from '../core/api.js';
 import { toast } from '../core/toast.js';
+import { store } from '../core/store.js';
+import { realtimeClient } from '../realtime/websocket-client.js';
 
 export class LoginView {
   constructor(container) {
@@ -94,6 +96,8 @@ export class LoginView {
             store.setState({ csrfToken: res.csrfToken });
           }
           store.setState({ user: res.user });
+          // Re-establish WebSocket now that user is authenticated
+          realtimeClient.connect();
           // Restore previous view hash without full page reload
           const preLoginHash = sessionStorage.getItem('preLoginHash') || '#/office';
           sessionStorage.removeItem('preLoginHash');
