@@ -191,9 +191,9 @@ export class AgentsView {
                   const isTerminal = terminalStatuses.includes(agent.status);
                   const isWaiting = agent.status === 'waiting';
                   if (isTerminal) {
-                    return '<button class="btn btn-ghost btn-xs text-base-content/40 btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}" disabled title="Terminal status: cannot pause/resume"><i class="fi fi-rr-pause text-xs text-base-content/40"></i><span>N/A</span></button>';
+                    return `<button class="btn btn-ghost btn-xs text-base-content/40 btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}" disabled title="Terminal status: cannot pause/resume"><i class="fi fi-rr-pause text-xs text-base-content/40"></i><span>N/A</span></button>`;
                   }
-                  return '<button class="btn btn-ghost btn-xs text-base-content hover:text-primary btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}"><i class="${isWaiting ? 'fi fi-rr-play text-xs text-success' : 'fi fi-rr-pause text-xs text-warning'}"></i><span>${isWaiting ? 'Resume' : 'Pause'}</span></button>';
+                  return `<button class="btn btn-ghost btn-xs text-base-content hover:text-primary btn-cmd-pause gap-1" data-id="${agent.id}" data-status="${agent.status}"><i class="${isWaiting ? 'fi fi-rr-play text-xs text-success' : 'fi fi-rr-pause text-xs text-warning'}"></i><span>${isWaiting ? 'Resume' : 'Pause'}</span></button>`;
                 })()}
               </div>
             </div>
