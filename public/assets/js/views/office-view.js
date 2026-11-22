@@ -179,9 +179,9 @@ export class OfficeView {
     await this.loadInitialOfficeState();
 
     // Start movement engine
-    movementEngine.setUpdateCallback((agents) => {
+    movementEngine.setUpdateCallback((agents, deltaSec) => {
       this.renderAvatars(agents);
-      this.camera.updateFollow(agents, dt);
+      this.camera.updateFollow(agents, deltaSec);
     });
     movementEngine.start();
 
