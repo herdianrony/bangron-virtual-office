@@ -249,7 +249,7 @@ export class SettingsView {
     if (icon) {
       icon.className = effective === 'dark' ? 'fi fi-rr-sun text-base' : 'fi fi-rr-moon text-base';
     }
-    if (btn) btn.title = \`Current: \${effective}. Click to toggle.\`;
+    if (btn) btn.title = `Current: ${effective}. Click to toggle.`;
   }
 
   destroy() {}

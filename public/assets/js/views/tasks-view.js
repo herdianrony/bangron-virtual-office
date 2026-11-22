@@ -16,16 +16,16 @@ export class TasksView {
   }
 
   showSkeleton() {
-    this.container.innerHTML = \`
+    this.container.innerHTML = `
       <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
-          \${SkeletonLoader.skeletonStat()}
+          ${SkeletonLoader.skeletonStat()}
         </div>
         <div class="overflow-x-auto">
-          \${SkeletonLoader.skeletonTable(6, 5)}
+          ${SkeletonLoader.skeletonTable(6, 5)}
         </div>
       </div>
-    \`;
+    `;
   }
 
   async render() {
@@ -195,7 +195,7 @@ export class TasksView {
 
     if (hint) {
       hint.innerText = selectedCap
-        ? \`Showing agents with capability: \${selectedCap}\`
+        ? `Showing agents with capability: ${selectedCap}`
         : 'Hermes auto-assigns best-matched specialist based on task description and capabilities.';
     }
   }
@@ -215,7 +215,7 @@ export class TasksView {
         EmptyState.show(container, {
           icon: 'fi fi-rr-list',
           title: 'Tidak ada task',
-          description: statusFilter === 'all' ? 'Tidak ada task yang tersedia saat ini.' : \`Tidak ada task dengan status: \${statusFilter}\`,
+          description: statusFilter === 'all' ? 'Tidak ada task yang tersedia saat ini.' : `Tidak ada task dengan status: ${statusFilter}`,
           actionLabel: 'Buat Task Baru',
           actionOnClick: () => { document.getElementById('btn-create-task')?.click(); }
         });
@@ -296,47 +296,47 @@ export class TasksView {
 
   renderTaskRow(task, index) {
     const isParent = !task.parent_task_id && task.subtask_count > 0;
-    return \`
+    return `
       <tr class="hover:bg-base-300/40 bulk-select-item">
         <td class="w-8">
-          <input type="checkbox" class="bulk-checkbox checkbox checkbox-sm checkbox-primary" data-id="\${task.id}" />
+          <input type="checkbox" class="bulk-checkbox checkbox checkbox-sm checkbox-primary" data-id="${task.id}" />
         </td>
         <td>
           <div class="font-bold text-base-content flex items-center gap-1.5">
-            \${task.parent_task_id ? '<span class="text-info font-mono">↳</span>' : ''}
-            \${task.title}
+            ${task.parent_task_id ? '<span class="text-info font-mono">↳</span>' : ''}
+            ${task.title}
           </div>
-          <div class="text-[11px] text-base-content/60 mt-0.5 truncate max-w-xs">\${task.description || ''}</div>
+          <div class="text-[11px] text-base-content/60 mt-0.5 truncate max-w-xs">${task.description || ''}</div>
         </td>
         <td>
-          \${isParent ? \`<span class="badge badge-info badge-xs font-mono font-semibold">\${task.subtasks_completed_count}/\${task.subtask_count} subtasks</span>\` : '<span class="text-base-content/40 text-[11px]">Single Task</span>'}
+          ${isParent ? `<span class="badge badge-info badge-xs font-mono font-semibold">${task.subtasks_completed_count}/${task.subtask_count} subtasks</span>` : '<span class="text-base-content/40 text-[11px]">Single Task</span>'}
         </td>
         <td>
-          \${task.assigned_agent_name ? \`<span class="badge badge-neutral badge-sm">\${task.assigned_agent_name}</span>\` : '<span class="text-base-content/40 italic">Unassigned</span>'}
+          ${task.assigned_agent_name ? `<span class="badge badge-neutral badge-sm">${task.assigned_agent_name}</span>` : '<span class="text-base-content/40 italic">Unassigned</span>'}
         </td>
         <td>
-          <span class="badge badge-xs font-semibold \${task.priority === 'critical' ? 'badge-error' : task.priority === 'high' ? 'badge-warning' : 'badge-ghost'}">
-            \${task.priority}
+          <span class="badge badge-xs font-semibold ${task.priority === 'critical' ? 'badge-error' : task.priority === 'high' ? 'badge-warning' : 'badge-ghost'}">
+            ${task.priority}
           </span>
         </td>
         <td>
-          <span class="badge badge-xs font-medium \${task.status === 'running' ? 'badge-primary' : task.status === 'waiting' ? 'badge-warning' : task.status === 'completed' ? 'badge-success' : task.status === 'failed' ? 'badge-error' : task.status === 'cancelled' ? 'badge-neutral' : task.status === 'on_hold' ? 'badge-info' : task.status === 'planning' ? 'badge-secondary' : 'badge-ghost'}">
-            \${task.status}
+          <span class="badge badge-xs font-medium ${task.status === 'running' ? 'badge-primary' : task.status === 'waiting' ? 'badge-warning' : task.status === 'completed' ? 'badge-success' : task.status === 'failed' ? 'badge-error' : task.status === 'cancelled' ? 'badge-neutral' : task.status === 'on_hold' ? 'badge-info' : task.status === 'planning' ? 'badge-secondary' : 'badge-ghost'}">
+            ${task.status}
           </span>
         </td>
         <td>
           <div class="text-xs text-base-content/80">
-            \${task.result_summary || (task.status === 'running' ? '<span class="text-info flex items-center gap-1"><span class="loading loading-spinner loading-xs"></span> Executing step...</span>' : '-')}
+            ${task.result_summary || (task.status === 'running' ? '<span class="text-info flex items-center gap-1"><span class="loading loading-spinner loading-xs"></span> Executing step...</span>' : '-')}
           </div>
         </td>
         <td>
           <div class="flex items-center gap-1.5">
-            \${task.status === 'failed' || task.status === 'cancelled' ? \`<button class="btn btn-ghost btn-xs text-warning hover:bg-warning/10 btn-retry gap-1" data-id="\${task.id}" title="Retry Task"><i class="fi fi-rr-refresh text-xs"></i><span>Retry</span></button>\` : ''}
-            \${task.status === 'running' || task.status === 'waiting' || task.status === 'pending' ? \`<button class="btn btn-ghost btn-xs text-error hover:bg-error/10 btn-cancel gap-1" data-id="\${task.id}" title="Cancel Task"><i class="fi fi-rr-cross-circle text-xs"></i><span>Cancel</span></button>\` : ''}
+            ${task.status === 'failed' || task.status === 'cancelled' ? `<button class="btn btn-ghost btn-xs text-warning hover:bg-warning/10 btn-retry gap-1" data-id="${task.id}" title="Retry Task"><i class="fi fi-rr-refresh text-xs"></i><span>Retry</span></button>` : ''}
+            ${task.status === 'running' || task.status === 'waiting' || task.status === 'pending' ? `<button class="btn btn-ghost btn-xs text-error hover:bg-error/10 btn-cancel gap-1" data-id="${task.id}" title="Cancel Task"><i class="fi fi-rr-cross-circle text-xs"></i><span>Cancel</span></button>` : ''}
           </div>
         </td>
       </tr>
-    \`;
+    `;
   }
 
   initEvents() {

@@ -12,16 +12,16 @@ export class ApprovalsView {
   }
 
   showSkeleton() {
-    this.container.innerHTML = \`
+    this.container.innerHTML = `
       <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
-          \${SkeletonLoader.skeletonStat()}
+          ${SkeletonLoader.skeletonStat()}
         </div>
         <div class="space-y-3" id="approvals-list">
-          \${SkeletonLoader.skeletonList(5)}
+          ${SkeletonLoader.skeletonList(5)}
         </div>
       </div>
-    \`;
+    `;
   }
 
   async render() {
