@@ -1,90 +1,48 @@
-// Service Worker security tests — authenticated API cache isolation
-// Verifies: /api/* responses (except safe allowlist) are NOT cached by SW,
-// logout clears API cache, no cross-account data leakage via SW cache.
-// Runs against isolated E2E server (port 3102, fresh DB).
+// Service Worker security tests — authenticated API cache isolation.
+// Only public, session-independent health responses may be cached. CSRF and
+// authenticated API responses remain network-only to prevent cross-session leaks.
 
 import { test, expect } from '@playwright/test';
-import dotenv from 'dotenv';
 
-dotenv.config();
-
-const DIRECTOR_EMAIL = process.env.INITIAL_DIRECTOR_EMAIL;
-const DIRECTOR_PASSWORD = process.env.INITIAL_DIRECTOR_PASSWORD;
+async function readServiceWorker(page) {
+  await page.goto('/office');
+  return page.evaluate(async () => {
+    const response = await fetch('/sw.js', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Unable to read /sw.js: HTTP ${response.status}`);
+    return response.text();
+  });
+}
 
 test.describe('Service Worker API cache security', () => {
-  test('safe API endpoints /api/health and /api/auth/csrf are cacheable', async ({ page }) => {
-    await page.route('**/api/health', (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ status: 'ok', timestamp: Date.now() }),
-      });
-    });
+  test('only public health endpoint is eligible for API caching', async ({ page }) => {
+    const swSource = await readServiceWorker(page);
 
-    await page.route('**/api/auth/csrf', (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ csrfToken: 'test-csrf-token' }),
-      });
-    });
-
-    await page.goto('/office');
-    await page.waitForTimeout(2000);
-
-    const title = await page.title();
-    expect(title.length).toBeGreaterThan(0);
-  });
-
-  test('SW source contains API cache allowlist', async ({ page }) => {
-    await page.goto('/office');
-    await page.waitForTimeout(2000);
-
-    const swSource = await page.evaluate(() => {
-      return fetch('/sw.js').then(r => r.text());
-    });
-
-    // Safe allowlist endpoints
-    expect(swSource).toContain('/api/health');
-    expect(swSource).toContain('/api/auth/csrf');
-
-    // Non-allowlist API endpoints use network-only (not in cacheable list)
-    // The allowlist pattern should NOT include /api/auth/me or other authenticated endpoints
-    const allowlistMatch = swSource.match(/allowlist\s*[:=]\s*\[([^\]]+)\]/);
-    if (allowlistMatch) {
-      const allowlist = allowlistMatch[1];
-      expect(allowlist).not.toContain('/api/auth/me');
-      expect(allowlist).not.toContain('/api/tasks');
-    }
-
-    // 5-minute cache expiration
+    expect(swSource).toContain("url.pathname === '/api/health'");
+    expect(swSource).toContain('isPublicHealth');
+    expect(swSource).toContain('networkFirstThenCache(request, API_CACHE_NAME)');
+    expect(swSource).toContain(': fetch(request)');
+    expect(swSource).toContain('CSRF tokens are session-bound');
+    expect(swSource).not.toContain("url.pathname === '/api/auth/csrf'");
     expect(swSource).toContain('5 * 60 * 1000');
   });
 
-  test('SW logout handler clears API cache', async ({ page }) => {
-    await page.goto('/office');
-    await page.waitForTimeout(2000);
+  test('logout message clears the API cache', async ({ page }) => {
+    const swSource = await readServiceWorker(page);
 
-    const swSource = await page.evaluate(() => {
-      return fetch('/sw.js').then(r => r.text());
-    });
-
-    // Logout message handler
-    expect(swSource).toContain("event.data === 'logout'");
-    expect(swSource).toContain('caches.delete(API_CACHE_NAME)');
-    expect(swSource).toContain('API cache cleared on logout');
+    // Accept the current object message and the legacy string message.
+    expect(swSource).toContain("event.data === 'logout' || event.data?.type === 'logout'");
+    expect(swSource).toContain('event.waitUntil(caches.delete(API_CACHE_NAME))');
   });
 
-  test('app.js posts logout message to SW controller', async ({ page }) => {
+  test('application sends the logout message to the active service worker', async ({ page }) => {
     await page.goto('/office');
-    await page.waitForTimeout(2000);
-
-    const appSource = await page.evaluate(() => {
-      return fetch('/assets/js/app.js').then(r => r.text());
+    const appSource = await page.evaluate(async () => {
+      const response = await fetch('/assets/js/app.js', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Unable to read app.js: HTTP ${response.status}`);
+      return response.text();
     });
 
     expect(appSource).toContain("type: 'logout'");
     expect(appSource).toContain('navigator.serviceWorker.controller.postMessage');
-    expect(appSource).toContain('Clear Service Worker API cache');
   });
 });
