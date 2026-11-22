@@ -20,6 +20,13 @@ export class AgentService {
     return { instances, profiles };
   }
 
+  getCapabilities() {
+    const profiles = this.agentRepo.getAllProfiles();
+    const allCaps = profiles.flatMap((p) => p.capabilities || []);
+    const unique = [...new Set(allCaps)].sort();
+    return { capabilities: unique };
+  }
+
   getById(id) {
     const instance = this.agentRepo.getInstanceById(id);
     if (!instance) return null;

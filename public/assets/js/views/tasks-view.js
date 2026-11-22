@@ -115,7 +115,7 @@ export class TasksView {
               </div>
               <div>
                 <label class="label text-xs font-semibold text-base-content/80 pb-1">Filter by Capability</label>
-                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-capability-filter" onchange="window.currentTasksView.filterAgentsByCapability()">
+                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-capability-filter">
                   <option value="">All Capabilities</option>
                 </select>
               </div>
@@ -123,7 +123,7 @@ export class TasksView {
             <div class="grid grid-cols-2 gap-3">
               <div class="col-span-full">
                 <label class="label text-xs font-semibold text-base-content/80 pb-1">Assign Specialist</label>
-                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-agent" id="task-agent-select">
+                <select class="select select-bordered select-sm w-full bg-base-100 text-base-content border-base-content/20" id="task-agent">
                   <option value="">-- Let Hermes Assign --</option>
                 </select>
                 <span class="text-[11px] text-base-content/40 block mt-1" id="task-agent-cap-hint">Hermes auto-assigns best-matched specialist based on task description and capabilities.</span>
@@ -276,21 +276,21 @@ export class TasksView {
           </tr>
         `;
       }).join('');
+
+      // Initialize virtual scroll for large lists (100+ items)
+      if (!this.virtualScroll && filtered.length > 50) {
+        const tbody = document.getElementById('tasks-table-body');
+        if (tbody) {
+          this.virtualScroll = new VirtualScroll({
+            container: tbody.parentElement,
+            itemHeight: 52,
+            data: filtered,
+            renderItem: (task, index) => this.renderTaskRow(task)
+          });
+        }
+      }
     } catch (err) {
       console.error('Failed to load tasks:', err);
-    }
-
-    // Initialize virtual scroll for large lists (100+ items)
-    if (!this.virtualScroll && filtered.length > 50) {
-      const tbody = document.getElementById('tasks-table-body');
-      if (tbody) {
-        this.virtualScroll = new VirtualScroll({
-          container: tbody.parentElement,
-          itemHeight: 52,
-          data: filtered,
-          renderItem: (task, index) => this.renderTaskRow(task)
-        });
-      }
     }
   }
 
@@ -351,6 +351,11 @@ export class TasksView {
         e.target.classList.remove('btn-ghost');
         this.loadTasks(e.target.dataset.status);
       });
+    });
+
+    // Capability filter
+    document.getElementById('task-capability-filter')?.addEventListener('change', () => {
+      this.filterAgentsByCapability();
     });
 
     // Modal
