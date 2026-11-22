@@ -174,8 +174,8 @@ export class ApprovalsView {
           </div>
         `;
       }).join('');
-      this.currentApprovals = items;
-      this.escalationTimer.updateApprovals(items);
+      this.currentApprovals = filtered;
+      this.escalationTimer.updateApprovals(filtered);
     } catch (err) {
       console.error('Failed to load approvals:', err);
     }
