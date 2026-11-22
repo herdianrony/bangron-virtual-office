@@ -810,7 +810,7 @@ export class TopdownRenderer {
       const { w, h, offsetY } = hitGeometry[type] || hitGeometry.desk;
       const label = `${ws.name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[type] || 'Furnitur kantor'}`;
       return `<rect class="td-hit-test-furniture" x="${px - w / 2}" y="${py + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
-    }).filter(Boolean).join('\\n');
+    }).filter(Boolean).join('\n');
   }
 }
 
