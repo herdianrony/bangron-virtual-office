@@ -9,16 +9,16 @@ export class AgentsView {
   }
 
   showSkeleton() {
-    this.container.innerHTML = \`
+    this.container.innerHTML = `
       <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <div class="stats stats-vertical lg:stats-horizontal shadow-xl bg-base-200 border border-base-content/10 w-full">
-          \${SkeletonLoader.skeletonStat()}
+          ${SkeletonLoader.skeletonStat()}
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="agents-grid">
-          \${SkeletonLoader.skeletonCard()}
+          ${SkeletonLoader.skeletonCard()}
         </div>
       </div>
-    \`;
+    `;
   }
 
   async render() {
@@ -136,7 +136,7 @@ export class AgentsView {
   async loadAgents(filterDept = 'all') {
     try {
       const data = await api.get('/api/agents');
-      const { instances } = agentsData;
+      const { instances } = data;
       const grid = document.getElementById('agents-grid');
       if (!grid) return;
 
