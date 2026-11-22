@@ -159,12 +159,24 @@ export class TasksView {
 
   async loadAgentsOptions() {
     try {
-      const [agentsData, capabilitiesData] = await Promise.all([
+      const [agentsResult, capabilitiesResult] = await Promise.allSettled([
         api.get('/api/agents'),
-        api.get('/api/capabilities')
+        api.get('/api/agents/capabilities')
       ]);
-      this.agents = agentsData.instances || [];
-      this.capabilities = capabilitiesData.capabilities || [];
+
+      if (agentsResult.status === 'rejected') {
+        throw agentsResult.reason;
+      }
+      this.agents = agentsResult.value?.instances || [];
+      this.capabilities = capabilitiesResult.status === 'fulfilled'
+        ? (capabilitiesResult.value?.capabilities || [])
+        : [];
+
+      if (capabilitiesResult.status === 'rejected') {
+        // Agent assignment remains usable even if the optional capability
+        // catalogue is temporarily unavailable.
+        console.warn('Capabilities unavailable; showing all agents:', capabilitiesResult.reason);
+      }
 
       const select = document.getElementById('task-agent');
       const capFilter = document.getElementById('task-capability-filter');
@@ -202,15 +214,18 @@ export class TasksView {
 
   async loadTasks(statusFilter = 'all') {
     try {
-      const tasks = await api.get('/api/tasks');
+      const tasksResponse = await api.get('/api/tasks');
+      const tasks = Array.isArray(tasksResponse)
+        ? tasksResponse
+        : (Array.isArray(tasksResponse?.tasks) ? tasksResponse.tasks : []);
       const tbody = document.getElementById('tasks-table-body');
       if (!tbody) return;
 
-      const filtered = statusFilter === 'all'
+      const filteredTasks = statusFilter === 'all'
         ? tasks
-        : tasks.filter((t) => t.status === statusFilter);
+        : tasks.filter((task) => task.status === statusFilter);
 
-      if (filtered.length === 0) {
+      if (filteredTasks.length === 0) {
         const container = document.getElementById('tasks-table-body').parentElement;
         EmptyState.show(container, {
           icon: 'fi fi-rr-list',
@@ -222,7 +237,7 @@ export class TasksView {
         return;
       }
 
-      tbody.innerHTML = filtered.map((t) => {
+      tbody.innerHTML = filteredTasks.map((t) => {
         const isParent = !t.parent_task_id && t.subtask_count > 0;
         return `
           <tr class="hover:bg-base-300/40 bulk-select-item">
@@ -278,13 +293,13 @@ export class TasksView {
       }).join('');
 
       // Initialize virtual scroll for large lists (100+ items)
-      if (!this.virtualScroll && filtered.length > 50) {
+      if (!this.virtualScroll && filteredTasks.length > 50) {
         const tbody = document.getElementById('tasks-table-body');
         if (tbody) {
           this.virtualScroll = new VirtualScroll({
             container: tbody.parentElement,
             itemHeight: 52,
-            data: filtered,
+            data: filteredTasks,
             renderItem: (task, index) => this.renderTaskRow(task)
           });
         }
