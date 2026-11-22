@@ -779,38 +779,42 @@ export class TopdownRenderer {
     return `<g id="hit-test-layer" pointer-events="all" style="display: none;">\n${roomsHit}\n${corridorsHit}\n</g>`;
   }
 
-  /* Helper: render hit-test shapes for furniture/workstations */
+  /* Helper: render hit-test shapes for furniture/workstations.
+   * Workstation API records expose anchor positions, not width/height.
+   * Derive hit areas from each furniture glyph to keep SVG geometry valid.
+   */
   renderFurnitureHitTest(workstations = []) {
     // Workstations from /api/virtual-office/state carry position_x, position_y,
     // capacity, workstation_type — but NOT width/height. Derive hit areas from
     // the actual furniture geometry per type so SVG rect attributes are always
     // valid numbers (never "undefined").
-    const HIT_DIMS = {
-      executive_desk: { w: 58, h: 30 },
-      qa_bench: { w: 46, h: 26 },
-      design_bench: { w: 46, h: 26 },
-      creative_bench: { w: 46, h: 26 },
-      bench: { w: 46, h: 26 },
-      dev_desk: { w: 44, h: 26 },
-      desk: { w: 44, h: 26 },
-      terminal: { w: 26, h: 46 },
-      conference_table: { w: 92, h: 52 },
-      couch: { w: 56, h: 26 },
-      command_pod: { w: 40, h: 40 },
-      reception: { w: 48, h: 20 },
-      library_table: { w: 80, h: 24 },
-      coffee_bar: { w: 76, h: 18 },
+    const hitGeometry = {
+      terminal: { w: 34, h: 50, offsetY: -33 },
+      conference_table: { w: 112, h: 72, offsetY: 0 },
+      couch: { w: 64, h: 36, offsetY: -6 },
+      command_pod: { w: 48, h: 48, offsetY: -6 },
+      reception: { w: 56, h: 36, offsetY: -8 },
+      library_table: { w: 88, h: 56, offsetY: -12 },
+      coffee_bar: { w: 84, h: 54, offsetY: -12 },
+      executive_desk: { w: 64, h: 42, offsetY: -14 },
+      qa_bench: { w: 52, h: 38, offsetY: -14 },
+      design_bench: { w: 52, h: 38, offsetY: -14 },
+      creative_bench: { w: 52, h: 38, offsetY: -14 },
+      bench: { w: 52, h: 38, offsetY: -14 },
+      desk: { w: 50, h: 38, offsetY: -14 },
+      dev_desk: { w: 50, h: 38, offsetY: -14 }
     };
+
     return workstations.map((ws) => {
-      const { id, name, position_x: px, position_y: py, workstation_type } = ws;
-      const dims = HIT_DIMS[workstation_type] || HIT_DIMS.desk;
-      const w = Number.isFinite(Number(dims.w)) ? dims.w : 44;
-      const h = Number.isFinite(Number(dims.h)) ? dims.h : 26;
-      const x = (Number.isFinite(Number(px)) ? Number(px) : 0) - w / 2;
-      const y = (Number.isFinite(Number(py)) ? Number(py) : 0) - h / 2;
-      const label = `${name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[workstation_type] || 'Furnitur kantor'}`;
-      return `<rect class="td-hit-test-furniture" x="${x}" y="${y}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
-    }).join('\n');
+      const px = Number(ws.position_x);
+      const py = Number(ws.position_y);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return '';
+
+      const type = ws.workstation_type || 'desk';
+      const { w, h, offsetY } = hitGeometry[type] || hitGeometry.desk;
+      const label = `${ws.name || 'Workstation'} — ${WORKSTATION_TYPE_LABELS[type] || 'Furnitur kantor'}`;
+      return `<rect class="td-hit-test-furniture" x="${px - w / 2}" y="${py + offsetY - h / 2}" width="${w}" height="${h}" rx="4" data-name="${esc(label)}" pointer-events="all"/>`;
+    }).filter(Boolean).join('\n');
   }
 }
 

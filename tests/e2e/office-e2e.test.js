@@ -208,6 +208,39 @@ async function cleanupAgent(context, page, agentId, taskId) {
 /* ------------------------------------------------------------------ */
 
 test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
+  test('office animation and SVG geometry render without runtime errors', async ({ page }) => {
+    const pageErrors = [];
+    const svgGeometryErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const text = message.text();
+      if (/\b<rect> attribute (?:width|height): Expected length/.test(text)) {
+        svgGeometryErrors.push(text);
+      }
+    });
+
+    await loginAsDirector(page);
+    await expect(page.locator('#office-svg-canvas')).toBeVisible();
+
+    // Exercise multiple animation frames and inspect the rendered hit-test
+    // rectangles backed by API workstation records (which have no dimensions).
+    await page.waitForTimeout(1000);
+    expect(pageErrors).toEqual([]);
+    expect(svgGeometryErrors).toEqual([]);
+    const furnitureHitAreas = await page.locator('#hit-test-layer .td-hit-test-furniture').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        width: Number(node.getAttribute('width')),
+        height: Number(node.getAttribute('height'))
+      }))
+    );
+    expect(furnitureHitAreas.length).toBeGreaterThan(0);
+    expect(furnitureHitAreas.every((area) =>
+      Number.isFinite(area.width) && area.width > 0 &&
+      Number.isFinite(area.height) && area.height > 0
+    )).toBe(true);
+  });
+
   test('office page loads and renders agents', async ({ page }) => {
     await loginAsDirector(page);
     await expect(page).toHaveTitle(/Bangron Virtual Office/);

@@ -182,9 +182,9 @@ export class OfficeView {
     // MovementEngine.tick(); deltaSec is the elapsed seconds since the last
     // frame and is required by CameraController.updateFollow() for time-based
     // lerp smoothing. Without it, dt is ReferenceError'd and animation dies.
-    movementEngine.setUpdateCallback((agents, dt) => {
+    movementEngine.setUpdateCallback((agents, deltaSec) => {
       this.renderAvatars(agents);
-      this.camera.updateFollow(agents, dt);
+      this.camera.updateFollow(agents, deltaSec);
     });
     movementEngine.start();
 
