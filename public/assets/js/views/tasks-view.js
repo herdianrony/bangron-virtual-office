@@ -1,10 +1,10 @@
 import { api } from '../core/api.js';
-import { SkeletonLoader } from '../core/skeleton.js';
-import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { store } from '../core/store.js';
 import { showToast } from '../core/toast.js';
+import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
+import { SkeletonLoader } from '../core/skeleton.js';
 import { ConfirmDialog } from '../core/confirm-dialog.js';
 import { BulkActionManager } from '../core/bulk-action.js';
-import { VirtualScroll } from '../core/virtual-scroll.js';
 
 export class TasksView {
   constructor(container) {
@@ -12,7 +12,6 @@ export class TasksView {
     this.capabilities = [];
     this.agents = [];
     this.bulkManager = null;
-    this.virtualScroll = null;
   }
 
   showSkeleton() {
@@ -292,19 +291,7 @@ export class TasksView {
         `;
       }).join('');
 
-      // Initialize virtual scroll for large lists (100+ items)
-      if (!this.virtualScroll && filteredTasks.length > 50) {
-        const tbody = document.getElementById('tasks-table-body');
-        if (tbody) {
-          this.virtualScroll = new VirtualScroll({
-            container: tbody.parentElement,
-            itemHeight: 52,
-            data: filteredTasks,
-            renderItem: (task, index) => this.renderTaskRow(task)
-          });
-        }
-      }
-    } catch (err) {
+      } catch (err) {
       console.error('Failed to load tasks:', err);
     }
   }
