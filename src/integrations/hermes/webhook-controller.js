@@ -102,18 +102,54 @@ export class HermesWebhookController {
 
   getStatus = async (req, res) => {
     try {
-      const runtimeStatus = await hermesAdapter.getRuntimeStatus();
-      const capabilities = await hermesAdapter.getCapabilities();
-      const recentEvents = this.eventRepo.getRecentEvents(10);
+      const [runtimeStatus, capabilities, modelOptions, health, sessions, jobs, recentEvents] = await Promise.all([
+        hermesAdapter.getRuntimeStatus(),
+        hermesAdapter.getCapabilities(),
+        hermesAdapter.getModelOptions(),
+        hermesAdapter.getHealthDetailed(),
+        hermesAdapter.listSessions({ limit: 8 }),
+        hermesAdapter.listJobs(),
+        Promise.resolve(this.eventRepo.getRecentEvents(10))
+      ]);
 
       return sendSuccess(res, {
         runtime: runtimeStatus,
-        capabilities: { object: capabilities.object || 'hermes.api_server.capabilities', features: capabilities.features || {} },
+        capabilities: {
+          object: capabilities.object || 'hermes.api_server.capabilities',
+          features: capabilities.features || {},
+          endpoints: capabilities.endpoints || []
+        },
+        models: (modelOptions.providers || []).flatMap((p) => (p.models || []).map((id) => ({ id, provider: p.slug }))),
+        currentModel: modelOptions.model || null,
+        health: { status: health.status, readiness: health.readiness?.status || 'unknown' },
+        sessions: { total: sessions.data?.length || 0, recent: (sessions.data || []).slice(0, 5) },
+        jobs: jobs.jobs || [],
         recentEvents
       });
     } catch (err) {
       return sendError(res, 'STATUS_CHECK_ERROR', err.message, [], 500);
     }
+  };
+
+  // Jobs API — director-only control over Hermes scheduled work
+  listJobs = async (req, res) => {
+    try { return sendSuccess(res, await hermesAdapter.listJobs()); }
+    catch (err) { return sendError(res, 'JOBS_FETCH_ERROR', err.message, [], 500); }
+  };
+
+  createJob = async (req, res) => {
+    try { return sendSuccess(res, await hermesAdapter.createJob(req.body), 'Job created', null, 201); }
+    catch (err) { return sendError(res, 'JOB_CREATE_ERROR', err.message, [], 500); }
+  };
+
+  controlJob = async (req, res) => {
+    try { return sendSuccess(res, await hermesAdapter.controlJob(req.params.id, req.params.action), 'Job updated'); }
+    catch (err) { return sendError(res, 'JOB_CONTROL_ERROR', err.message, [], 400); }
+  };
+
+  deleteJob = async (req, res) => {
+    try { return sendSuccess(res, await hermesAdapter.deleteJob(req.params.id), 'Job deleted'); }
+    catch (err) { return sendError(res, 'JOB_DELETE_ERROR', err.message, [], 500); }
   };
 }
 

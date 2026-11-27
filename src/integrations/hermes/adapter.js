@@ -40,6 +40,75 @@ export class HermesAdapter {
     return !!(this._capabilities && this._capabilities.features && this._capabilities.features[feature]);
   }
 
+  async _request(path, options = {}) {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Hermes API ${response.status} on ${path}: ${text.slice(0, 200)}`);
+    }
+    return response.json();
+  }
+
+  /** Curated provider/model inventory (authenticated, richer than /v1/models). */
+  async getModelOptions() {
+    try { return await this._request('/api/model/options'); }
+    catch (err) { logger.warn({ err }, 'Hermes model options unavailable'); return { providers: [], model: null }; }
+  }
+
+  /** Readiness check for dashboards and control planes. */
+  async getHealthDetailed() {
+    try { return await this._request('/health/detailed'); }
+    catch (err) { logger.warn({ err }, 'Hermes detailed health unavailable'); return { status: 'unavailable', readiness: { status: 'unknown' } }; }
+  }
+
+  /** Hermes sessions over REST (API-server owned sessions). */
+  async listSessions({ limit = 20, offset = 0 } = {}) {
+    try { return await this._request(`/api/sessions?limit=${limit}&offset=${offset}`); }
+    catch (err) { logger.warn({ err }, 'Hermes sessions unavailable'); return { object: 'list', data: [] }; }
+  }
+
+  /** Background scheduled work (Jobs API). */
+  async listJobs() {
+    try { return await this._request('/api/jobs'); }
+    catch (err) { logger.warn({ err }, 'Hermes jobs unavailable'); return { jobs: [] }; }
+  }
+
+  async createJob(body) { return this._request('/api/jobs', { method: 'POST', body: JSON.stringify(body) }); }
+
+  async controlJob(jobId, action) {
+    const allowed = ['run', 'pause', 'resume'];
+    if (!allowed.includes(action)) throw new Error(`Unsupported job action: ${action}`);
+    return this._request(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' });
+  }
+
+  async deleteJob(jobId) { return this._request(`/api/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }); }
+
+  /** Run control endpoints, gated by advertised capabilities. */
+  async resolveApproval(runId, body) {
+    await this.getCapabilities();
+    if (!this.supports('run_approval')) return { error: 'CAPABILITY_UNSUPPORTED' };
+    return this._request(`/v1/runs/${encodeURIComponent(runId)}/approval`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async clarifyRun(runId, body) {
+    await this.getCapabilities();
+    if (!this.supports('run_clarify')) return { error: 'CAPABILITY_UNSUPPORTED' };
+    return this._request(`/v1/runs/${encodeURIComponent(runId)}/clarify`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async resolveUnknownRun(runId, body) {
+    await this.getCapabilities();
+    if (!this.supports('run_unknown_resolution')) return { error: 'CAPABILITY_UNSUPPORTED' };
+    return this._request(`/v1/runs/${encodeURIComponent(runId)}/resolve-unknown`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
   async getRuntimeStatus() {
     try {
       const response = await fetch(`${this.baseUrl}/v1/models`, {

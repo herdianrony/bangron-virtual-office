@@ -17,4 +17,11 @@ router.post('/agents', webhookLimiter, hermesWebhookController.registerAgents);
 // clients. Consistent with /api/audit and /api/director/dashboard policy.
 router.get('/status', authenticate, requireDirector, hermesWebhookController.getStatus);
 
+// Jobs API surface (director-only). Hermes is the source of truth; the office
+// only proxies authenticated control calls.
+router.get('/jobs', authenticate, requireDirector, hermesWebhookController.listJobs);
+router.post('/jobs', authenticate, requireDirector, hermesWebhookController.createJob);
+router.post('/jobs/:id/:action', authenticate, requireDirector, hermesWebhookController.controlJob);
+router.delete('/jobs/:id', authenticate, requireDirector, hermesWebhookController.deleteJob);
+
 export default router;
