@@ -54,21 +54,11 @@ export class OfficeView {
 
           <!-- Viewport Navigation Controls -->
           <div class="join join-vertical shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10">
-            <div class="tooltip tooltip-left" data-tip="Perbesar">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
-            </div>
-            <div class="tooltip tooltip-left" data-tip="Perkecil">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
-            </div>
-            <div class="tooltip tooltip-left" data-tip="Reset tampilan">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
-            </div>
-            <div class="tooltip tooltip-left" data-tip="Ikuti agen">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
-            </div>
-            <div class="tooltip tooltip-left" data-tip="Layar penuh">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
-            </div>
+            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perbesar" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
+            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perkecil" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
+            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Reset tampilan" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
+            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Ikuti agen" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
+            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Layar penuh" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
           </div>
 
           <!-- Speed Controls -->
