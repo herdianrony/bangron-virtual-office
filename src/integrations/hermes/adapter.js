@@ -6,6 +6,38 @@ export class HermesAdapter {
     this.config = config;
     this.baseUrl = config.apiUrl || 'http://localhost:8642';
     this.apiKey = config.apiKey;
+    this._capabilities = null;
+    this._capabilitiesAt = 0;
+    this.CAPABILITIES_TTL_MS = 5 * 60 * 1000;
+  }
+
+  /**
+   * Ambil (dan cache) fitur yang benar-benar didukung API Server. Control plane
+   * tidak boleh menebak dukungan run/stop/SSE dari versi atau asumsi.
+   */
+  async getCapabilities() {
+    const now = Date.now();
+    if (this._capabilities && now - this._capabilitiesAt < this.CAPABILITIES_TTL_MS) {
+      return this._capabilities;
+    }
+    const empty = { object: 'hermes.api_server.capabilities', features: {} };
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/capabilities`, {
+        headers: { 'Authorization': `Bearer ${this.apiKey}` }
+      });
+      if (!response.ok) return empty;
+      const data = await response.json();
+      this._capabilities = data && data.features ? data : empty;
+      this._capabilitiesAt = now;
+      return this._capabilities;
+    } catch (err) {
+      logger.warn({ err }, 'Hermes capabilities probe failed; failing closed');
+      return empty;
+    }
+  }
+
+  supports(feature) {
+    return !!(this._capabilities && this._capabilities.features && this._capabilities.features[feature]);
   }
 
   async getRuntimeStatus() {

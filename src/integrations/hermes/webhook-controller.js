@@ -103,10 +103,12 @@ export class HermesWebhookController {
   getStatus = async (req, res) => {
     try {
       const runtimeStatus = await hermesAdapter.getRuntimeStatus();
+      const capabilities = await hermesAdapter.getCapabilities();
       const recentEvents = this.eventRepo.getRecentEvents(10);
 
       return sendSuccess(res, {
         runtime: runtimeStatus,
+        capabilities: { object: capabilities.object || 'hermes.api_server.capabilities', features: capabilities.features || {} },
         recentEvents
       });
     } catch (err) {
