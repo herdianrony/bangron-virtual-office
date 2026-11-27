@@ -1,4 +1,5 @@
 import { api } from '../core/api.js';
+import { store } from '../core/store.js';
 import { SkeletonLoader } from '../core/skeleton.js';
 import { EmptyState, EmptyStatePresets } from '../core/empty-state.js';
 import { showToast } from '../core/toast.js';
@@ -6,6 +7,21 @@ import { showToast } from '../core/toast.js';
 export class AgentsView {
   constructor(container) {
     this.container = container;
+    this.filterDept = 'all';
+    this.unsubscribe = null;
+    this.refreshTimer = null;
+  }
+
+  // Realtime: kartu agents mengikuti event WebSocket (status/position/created)
+  // tanpa perlu pindah halaman. Debounce menghindari fetch beruntun saat SSE
+  // memancarkan puluhan event dalam satu run.
+  subscribeRealtime() {
+    this.unsubscribe = store.subscribe((key) => {
+      if (!['agent_updated', 'agents_loaded', 'state_updated', 'runtime_status_changed'].includes(key)) return;
+      if (!document.getElementById('agents-grid')) return;
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = setTimeout(() => this.loadAgents(this.filterDept), 150);
+    });
   }
 
   showSkeleton() {
@@ -130,10 +146,12 @@ export class AgentsView {
     `;
 
     this.initEvents();
-    await this.loadAgents();
+    this.subscribeRealtime();
+    await this.loadAgents(this.filterDept);
   }
 
-  async loadAgents(filterDept = 'all') {
+  async loadAgents(filterDept = this.filterDept) {
+    this.filterDept = filterDept;
     try {
       const data = await api.get('/api/agents');
       const { instances } = data;
@@ -295,7 +313,10 @@ export class AgentsView {
     });
   }
 
-  destroy() {}
+  destroy() {
+    if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
+    clearTimeout(this.refreshTimer);
+  }
 }
 
 export default AgentsView;

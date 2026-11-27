@@ -33,6 +33,18 @@ export class HermesEventBridge {
     this.activePolls = new Map(); // runId -> { controller, taskId, lastEventId, lastSeq, onEvent }
     this.running = false;
     this.runTaskMap = new Map(); // runId -> taskId mapping
+    this.runAgentMap = new Map(); // runId -> agentInstanceId mapping (SSE identity)
+  }
+
+  /**
+   * Register run-to-agent mapping for SSE event identity correlation.
+   * SSE events from the API server carry no agent identity; this map lets the
+   * bridge attribute them to the agent the task was dispatched from.
+   */
+  registerRunAgentMapping(runId, agentInstanceId) {
+    if (!runId || !agentInstanceId) return;
+    this.runAgentMap.set(runId, agentInstanceId);
+    logger.debug({ runId, agentInstanceId }, 'Registered run-to-agent mapping');
   }
 
   /**
@@ -491,6 +503,12 @@ export class HermesEventBridge {
       const mappedTaskId = this.runTaskMap.get(runId);
       if (mappedTaskId && !normalized.task_id) {
         normalized.task_id = mappedTaskId;
+      }
+      // Associate agent identity from the run mapping. SSE events carry no
+      // instance_id; only fill when the event has no explicit identity.
+      const mappedInstanceId = this.runAgentMap.get(runId);
+      if (mappedInstanceId && !normalized.instance_id) {
+        normalized.instance_id = mappedInstanceId;
       }
 
       const result = await this._reconcileEvent(normalized);

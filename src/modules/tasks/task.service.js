@@ -113,6 +113,8 @@ export class TaskService {
       this.taskRepo.setHermesRunId(taskId, hermesRunId);
       // Register run-to-task mapping for event correlation
       hermesEventBridge.registerRunTaskMapping(hermesRunId, taskId);
+      // Register run-to-agent mapping — SSE events carry no agent identity
+      hermesEventBridge.registerRunAgentMapping(hermesRunId, agentInstanceId);
       logger.info({ taskId, hermesRunId }, 'Hermes run ID stored for task');
       // Start EventBridge polling asynchronously (fire-and-forget)
       // Do NOT await — HTTP request must not wait for SSE lifecycle
