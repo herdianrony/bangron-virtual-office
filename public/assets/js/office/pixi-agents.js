@@ -12,7 +12,7 @@
  * Pixi world container, so both layers stay pixel-aligned. The SVG has no
  * viewBox, so SVG user units == CSS pixels == Pixi screen units.
  */
-import { Application, Container, Graphics, Sprite, Texture, Text, Rectangle } from '../vendor/pixi.mjs';
+import { Application, Container, Graphics, Sprite, Texture, Text, Rectangle, Assets } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, shade } from './palette.js';
 
 const NIGHT_COLOR = 0x0d1522;
@@ -87,8 +87,8 @@ export class PixiAgentLayer {
     footG.destroy();
 
     // Slice character run sheets into per-direction, per-frame textures.
-    this.charFrames = CHARACTER_SHEETS.map((name) => {
-      const base = Texture.from(`/assets/sprites/limezu/${name}`);
+    this.charFrames = await Promise.all(CHARACTER_SHEETS.map(async (name) => {
+      const base = await Assets.load(`/assets/sprites/limezu/${name}`);
       const rows = [];
       for (let row = 0; row < 4; row++) {
         const frames = [];
@@ -101,7 +101,7 @@ export class PixiAgentLayer {
         rows.push(frames);
       }
       return rows;
-    });
+    }));
 
     this.app.ticker.add((ticker) => this._tick(ticker.deltaMS));
     this._onResize = () => this.resize();

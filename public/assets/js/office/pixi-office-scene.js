@@ -15,7 +15,7 @@
  *   scene.pick(clientX, clientY)       // -> { kind, id, name } | null
  *   scene.destroy()
  */
-import { Application, Container, Graphics, Sprite, Texture, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
+import { Application, Container, Graphics, Sprite, Texture, Text, Circle, Rectangle, Assets } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, colorToNumber } from './palette.js';
 import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_ZONES, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual } from './visual-layout.js';
 
@@ -86,7 +86,7 @@ export class PixiOfficeScene {
       this.spriteFrames = {};
       this.spriteSets = names;
       for (let set = 0; set < names.length; set++) {
-        const base = Texture.from(`/assets/sprites/limezu/${names[set]}-run.png`);
+        const base = await Assets.load(`/assets/sprites/limezu/${names[set]}-run.png`);
         for (let row = 0; row < 4; row++) {
           for (let col = 0; col < 6; col++) {
             this.spriteFrames[`${set}-${dirs[row]}-${col}`] = new Texture({
@@ -97,12 +97,12 @@ export class PixiOfficeScene {
         }
       }
       this.furnitureTextures = {
-        desk: Texture.from('/assets/sprites/limezu/f_desk.png'),
-        terminal: Texture.from('/assets/sprites/limezu/f_shelf.png'),
-        conference_table: Texture.from('/assets/sprites/limezu/f_table.png'),
-        couch: Texture.from('/assets/sprites/limezu/f_vase.png'),
-        library_table: Texture.from('/assets/sprites/limezu/f_shelf.png'),
-        coffee_bar: Texture.from('/assets/sprites/limezu/f_vase.png')
+        desk: await Assets.load('/assets/sprites/limezu/f_desk.png'),
+        terminal: await Assets.load('/assets/sprites/limezu/f_shelf.png'),
+        conference_table: await Assets.load('/assets/sprites/limezu/f_table.png'),
+        couch: await Assets.load('/assets/sprites/limezu/f_vase.png'),
+        library_table: await Assets.load('/assets/sprites/limezu/f_shelf.png'),
+        coffee_bar: await Assets.load('/assets/sprites/limezu/f_vase.png')
       };
     } catch (err) {
       console.warn('[Office] Limezu sprites unavailable, using vector fallback', err);
