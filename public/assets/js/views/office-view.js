@@ -1,9 +1,9 @@
 import { store } from '../core/store.js';
 import { api } from '../core/api.js';
 import { topdownRenderer } from '../office/topdown-renderer.js';
-import { pixiAgentLayer } from '../office/pixi-agents.js';
 import { movementEngine } from '../office/movement-engine.js';
 import CameraController from '../office/camera.js';
+import { PixiOfficeScene } from '../office/pixi-office-scene.js';
 
 export class OfficeView {
   constructor(container) {
@@ -70,25 +70,8 @@ export class OfficeView {
           </div>
         </div>
 
-        <!-- SVG Architectural Plan Canvas (static rooms, corridors, furniture, FX) -->
-        <svg id="office-svg-canvas">
-          <defs></defs>
-
-          <!-- Dynamic Camera Viewport Group -->
-          <g id="camera-viewport">
-            <!-- Layer 1: Rooms and Floor Bounds -->
-            <g id="rooms-layer"></g>
-
-            <!-- Layer 1.5: Decorations (lamps, plants, clock) -->
-            <g id="decor-layer"></g>
-
-            <!-- Layer 2: Furniture and Workstations -->
-            <g id="furniture-layer"></g>
-
-            <!-- Layer 3: Atmosphere FX (night veil) — agents live on the PixiJS canvas above -->
-            <g id="fx-layer"></g>
-          </g>
-        </svg>
+        <!-- PixiJS scene host: one canvas renders the entire office -->
+        <div id="office-scene-host" class="absolute inset-0 z-0"></div>
 
         <!-- Hover Tooltip -->
         <div id="office-tooltip"></div>
@@ -159,19 +142,26 @@ export class OfficeView {
       </div>
     `;
 
-    // Initialize Camera (top-down projection) and the PixiJS agent layer
-    const svg = document.getElementById('office-svg-canvas');
-    const viewport = document.getElementById('camera-viewport');
-    this.camera = new CameraController(svg, viewport, topdownRenderer.projection);
-    this.camera.onTransformChange = (t) => pixiAgentLayer.applyCamera(t);
+    // PixiJS-first scene: satu canvas untuk seluruh kantor.
+    const host = document.getElementById('office-scene-host');
+    this.scene = new PixiOfficeScene();
+    await this.scene.init(host);
+    this.scene.onAgentClick = (id) => this.openAgentInspector(id);
+    this.scene.setNight(this.nightMode);
 
-    await pixiAgentLayer.init(svg);
-    pixiAgentLayer.setNight(this.nightMode);
+    // Camera adapter: CameraController tetap dipakai untuk logika pan/zoom/follow,
+    // tetapi output transform-nya kini masuk ke scene PixiJS (bukan SVG).
+    this.camera = new CameraController(host, null, topdownRenderer.projection);
+    this.camera.onTransformChange = (t) => this.scene.applyCamera(t);
+    this.scene.setState({
+      rooms: [], workstations: [],
+      corridors: [{ id: 'corr_main', x: 30, y: 295, w: 940, h: 45 }],
+      building: topdownRenderer.BOUNDS
+    });
+    this.camera.fitBounds(topdownRenderer.BOUNDS);
 
     // Bind Controls
     this.initControls();
-
-    // Camera framing, static layers, clock, night lighting
     this.setupScene();
 
     // Load State from Backend API
@@ -225,11 +215,13 @@ export class OfficeView {
         corridors: state.corridors || null
       });
 
-      // Render static layers for the active view mode
-      this.renderStaticLayers();
-
-      // Add furniture hit-test shapes now that workstations are loaded
-      this.addFurnitureHitTest();
+      // Scene PixiJS menggambar seluruh kantor dari state kanonik backend.
+      this.scene.setState({
+        rooms: state.rooms,
+        workstations: state.workstations,
+        corridors: state.corridors,
+        building: state.building || topdownRenderer.BOUNDS
+      });
 
       // Sync agents to movement engine
       store.setAgents(state.agents);
@@ -239,58 +231,16 @@ export class OfficeView {
     }
   }
 
-  /** Add furniture hit-test shapes to the SVG hit-test layer */
-  addFurnitureHitTest() {
-    const hitTestLayer = document.getElementById('hit-test-layer');
-    if (!hitTestLayer) return;
-    const workstations = store.state.workstations || [];
-    if (workstations.length === 0) return;
-    const furnitureHit = topdownRenderer.renderFurnitureHitTest(workstations);
-    const existing = hitTestLayer.querySelectorAll('.td-hit-test-furniture');
-    existing.forEach(el => el.remove());
-    const furnitureGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    furnitureGroup.classList.add('td-hit-test-furniture-group');
-    furnitureGroup.innerHTML = furnitureHit;
-    hitTestLayer.appendChild(furnitureGroup);
-  }
-
-  renderStaticLayers() {
-    const rooms = store.state.rooms || [];
-    const workstations = store.state.workstations || [];
-    const roomsLayer = document.getElementById('rooms-layer');
-    const decorLayer = document.getElementById('decor-layer');
-    const furnitureLayer = document.getElementById('furniture-layer');
-    const fxLayer = document.getElementById('fx-layer');
-    if (!roomsLayer || !furnitureLayer) return;
-
-    topdownRenderer.ensureDefs(document.querySelector('#office-svg-canvas defs'));
-    roomsLayer.innerHTML = topdownRenderer.renderScene(rooms, store.state.corridors);
-    if (decorLayer) decorLayer.innerHTML = topdownRenderer.renderDecorations(rooms, store.state.corridors);
-    furnitureLayer.innerHTML = topdownRenderer.renderFurniture(workstations);
-    if (fxLayer) fxLayer.innerHTML = topdownRenderer.renderFx();
-  }
+  /** @deprecated SVG layers replaced by PixiOfficeScene. Kept as a no-op for compatibility. */
+  addFurnitureHitTest() {}
+  /** @deprecated SVG layers replaced by PixiOfficeScene. Kept as a no-op for compatibility. */
+  renderStaticLayers() {}
 
   setupScene() {
-    topdownRenderer.ensureDefs(document.querySelector('#office-svg-canvas defs'));
-    this.camera?.setProjection(topdownRenderer.projection);
-    this.camera?.fitBounds(topdownRenderer.BOUNDS);
-
-    this.renderStaticLayers();
-
-    // Add furniture hit-test shapes to the SVG hit-test layer
-    this.addFurnitureHitTest();
-
-    // Wall clock ticks while the plan is visible
-    topdownRenderer.startClock();
-
-    // Night lighting
     const container = this.container.querySelector('.office-container');
     container?.classList.toggle('td-night', this.nightMode);
-    const nightIcon = document.querySelector('#hud-night i');
-    if (nightIcon) nightIcon.className = this.nightMode ? 'fi fi-rr-sun text-xs' : 'fi fi-rr-moon text-xs';
-    const nightBtn = document.getElementById('hud-night');
-    nightBtn?.setAttribute('title', this.nightMode ? 'Ganti ke mode siang' : 'Ganti ke mode malam');
-    pixiAgentLayer.setNight(this.nightMode);
+    this.scene.setNight(this.nightMode);
+    this.scene.resize();
   }
 
   setNight(enabled) {
@@ -304,7 +254,7 @@ export class OfficeView {
     if (icon) icon.className = this.nightMode ? 'fi fi-rr-sun text-xs' : 'fi fi-rr-moon text-xs';
     const btn = document.getElementById('hud-night');
     btn?.setAttribute('title', this.nightMode ? 'Ganti ke mode siang' : 'Ganti ke mode malam');
-    pixiAgentLayer.setNight(this.nightMode);
+    this.scene.setNight(this.nightMode);
   }
 
   initControls() {
@@ -412,33 +362,19 @@ export class OfficeView {
         this.setNight(!this.nightMode);
         return;
       }
-      const agentId = this.pickAgentAt(e.clientX, e.clientY);
-      if (agentId) {
-        this.openAgentInspector(agentId);
+      const hit = this.scene.pick(e.clientX, e.clientY);
+      if (hit?.kind === 'agent') {
+        this.openAgentInspector(hit.id);
         return;
       }
-      // No agent hit -> check SVG hit-test layer for rooms/furniture/corridors
-      const hitTestLayer = document.getElementById('hit-test-layer');
-      if (hitTestLayer) {
-        // Temporarily show hit-test layer for elementFromPoint
-        hitTestLayer.style.display = 'block';
-        const svgEl = document.elementFromPoint(e.clientX, e.clientY);
-        hitTestLayer.style.display = 'none';
-        if (svgEl && svgEl.closest && svgEl.closest('.td-hit-test-room, .td-hit-test-corridor, .td-hit-test-furniture')) {
-          const target = svgEl.closest('.td-hit-test-room, .td-hit-test-corridor, .td-hit-test-furniture');
-          const name = target.getAttribute('data-name');
-          if (name) {
-            // Show tooltip for the clicked element
-            const tip = document.getElementById('office-tooltip');
-            if (tip) {
-              tip.textContent = name;
-              tip.style.display = 'block';
-              tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 290) + 'px';
-              tip.style.top = e.clientY + 14 + 'px';
-              // Auto-hide after 3 seconds
-              setTimeout(() => { tip.style.display = 'none'; }, 3000);
-            }
-          }
+      if (hit?.name) {
+        const tip = document.getElementById('office-tooltip');
+        if (tip) {
+          tip.textContent = hit.name;
+          tip.style.display = 'block';
+          tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 290) + 'px';
+          tip.style.top = e.clientY + 14 + 'px';
+          setTimeout(() => { tip.style.display = 'none'; }, 3000);
         }
       }
     });
@@ -469,9 +405,9 @@ export class OfficeView {
 
   /** Converts client coordinates to world coordinates via the camera transform. */
   clientToWorld(clientX, clientY) {
-    const svg = document.getElementById('office-svg-canvas');
-    if (!svg || !this.camera) return null;
-    const rect = svg.getBoundingClientRect();
+    const host = document.getElementById('office-scene-host');
+    if (!host || !this.camera) return null;
+    const rect = host.getBoundingClientRect();
     return {
       x: (clientX - rect.left - this.camera.panX) / this.camera.scale,
       y: (clientY - rect.top - this.camera.panY) / this.camera.scale
@@ -479,9 +415,8 @@ export class OfficeView {
   }
 
   pickAgentAt(clientX, clientY) {
-    const world = this.clientToWorld(clientX, clientY);
-    if (!world) return null;
-    return pixiAgentLayer.hitTest(world.x, world.y);
+    const hit = this.scene.pick(clientX, clientY);
+    return hit?.kind === 'agent' ? hit.id : null;
   }
 
   toggleFullscreen() {
@@ -552,17 +487,17 @@ export class OfficeView {
     const rendered = this.isRuntimeOffline()
       ? agents.map((a) => ({ ...a, status: 'offline' }))
       : agents;
-    pixiAgentLayer.updateAgents(rendered);
+    this.scene.setAgents(rendered);
   }
 
   initTooltip() {
-    const svg = document.getElementById('office-svg-canvas');
+    const host = document.getElementById('office-scene-host');
     const tip = document.getElementById('office-tooltip');
-    if (!svg || !tip) return;
+    if (!host || !tip) return;
     this._onTipMove = (e) => {
-      const t = e.target.closest('[data-name]');
-      if (t) {
-        tip.textContent = t.getAttribute('data-name');
+      const hit = this.scene?.pick(e.clientX, e.clientY);
+      if (hit?.name) {
+        tip.textContent = hit.name;
         tip.style.display = 'block';
         tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 290) + 'px';
         tip.style.top = e.clientY + 14 + 'px';
@@ -570,11 +505,9 @@ export class OfficeView {
         tip.style.display = 'none';
       }
     };
-    this._onTipLeave = () => {
-      tip.style.display = 'none';
-    };
-    svg.addEventListener('pointermove', this._onTipMove);
-    svg.addEventListener('pointerleave', this._onTipLeave);
+    this._onTipLeave = () => { tip.style.display = 'none'; };
+    host.addEventListener('pointermove', this._onTipMove);
+    host.addEventListener('pointerleave', this._onTipLeave);
   }
 
   openAgentInspector(agentId) {
@@ -637,12 +570,11 @@ export class OfficeView {
 
   destroy() {
     movementEngine.stop();
-    topdownRenderer.stopClock();
-    pixiAgentLayer.destroy();
-    const svg = document.getElementById('office-svg-canvas');
-    if (svg) {
-      if (this._onTipMove) svg.removeEventListener('pointermove', this._onTipMove);
-      if (this._onTipLeave) svg.removeEventListener('pointerleave', this._onTipLeave);
+    this.scene?.destroy();
+    const host = document.getElementById('office-scene-host');
+    if (host) {
+      if (this._onTipMove) host.removeEventListener('pointermove', this._onTipMove);
+      if (this._onTipLeave) host.removeEventListener('pointerleave', this._onTipLeave);
     }
     if (this.onFullscreenChange) {
       document.removeEventListener('fullscreenchange', this.onFullscreenChange);

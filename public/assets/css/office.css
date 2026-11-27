@@ -26,6 +26,18 @@
   cursor: grabbing;
 }
 
+/* PixiJS-first scene host (single WebGL canvas renders the entire office) */
+#office-scene-host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.office-scene-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* PixiJS agent layer: WebGL canvas composited above the SVG floor plan,
    below the HUD. Pointer events stay on the SVG (camera drag + tooltips);
    agent clicks are resolved through a coordinate hit-test instead. */
