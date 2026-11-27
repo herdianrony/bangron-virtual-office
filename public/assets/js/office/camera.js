@@ -77,7 +77,7 @@ export class CameraController {
   }
 
   /** Zoom & pan so the given world-space bounds fit the viewport. */
-  fitBounds(bounds, fillRatio = 0.92) {
+  fitBounds(bounds, fillRatio = 0.98) {
     const rect = this.svg.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const scale = Math.max(
@@ -85,7 +85,8 @@ export class CameraController {
       Math.min(this.maxScale, Math.min(rect.width / bounds.w, rect.height / bounds.h) * fillRatio)
     );
     this.scale = scale;
-    this.panX = rect.width / 2 - (bounds.x + bounds.w / 2) * scale;
+    const hudInset = rect.width >= 1024 ? 90 : 40; // reservasi ruang untuk HUD kanan
+    this.panX = (rect.width - hudInset) / 2 - (bounds.x + bounds.w / 2) * scale;
     this.panY = rect.height / 2 - (bounds.y + bounds.h / 2) * scale;
     this.updateTransform();
   }

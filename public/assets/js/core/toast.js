@@ -15,7 +15,7 @@ export class ToastService {
     }
     this.container = document.createElement('div');
     this.container.id = 'toast-root';
-    this.container.className = 'fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm sm:max-w-md pointer-events-none';
+    this.container.className = 'fixed top-20 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm sm:max-w-md pointer-events-none';
     document.body.appendChild(this.container);
     return this.container;
   }

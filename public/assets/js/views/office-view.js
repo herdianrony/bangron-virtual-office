@@ -25,7 +25,7 @@ export class OfficeView {
         <!-- Demo Control Ribbon (DaisyUI Component) -->
         <div class="demo-ribbon card bg-base-100/95 backdrop-blur border border-info/30 shadow-2xl p-2.5 flex-row items-center gap-3">
           <span class="badge badge-info badge-sm font-mono font-bold tracking-wider">DEMO PIPELINE</span>
-          <span class="demo-title text-xs font-semibold text-base-content flex items-center gap-1.5" id="demo-step-text">
+          <span class="demo-title hidden xl:inline text-xs font-semibold text-base-content flex items-center gap-1.5" id="demo-step-text">
             <i class="fi fi-rr-diagram-project text-info"></i>
             Simulated Multi-Agent Pipeline
           </span>
@@ -46,27 +46,29 @@ export class OfficeView {
         <!-- Floating HUD Controls (DaisyUI Join Component) -->
         <div class="office-hud">
           <!-- Day/Night toggle -->
-          <button class="btn btn-sm btn-ghost shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10" id="hud-night" title="Mode malam / siang">
-            <i class="fi fi-rr-moon text-xs"></i>
-          </button>
+          <div class="tooltip tooltip-left" data-tip="Mode malam / siang">
+            <button class="btn btn-sm btn-ghost btn-square shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10" id="hud-night" title="Mode malam / siang">
+              <i class="fi fi-rr-moon text-xs"></i>
+            </button>
+          </div>
 
           <!-- Viewport Navigation Controls -->
           <div class="join join-vertical shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10">
-            <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-in" title="Zoom In">
-              <i class="fi fi-rr-zoom-in text-xs"></i>
-            </button>
-            <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-out" title="Zoom Out">
-              <i class="fi fi-rr-zoom-out text-xs"></i>
-            </button>
-            <button class="btn btn-sm btn-ghost join-item" id="hud-reset" title="Reset View">
-              <i class="fi fi-rr-crosshairs text-xs"></i>
-            </button>
-            <button class="btn btn-sm btn-ghost join-item" id="hud-follow" title="Toggle Follow Agent">
-              <i class="fi fi-rr-eye text-xs"></i>
-            </button>
-            <button class="btn btn-sm btn-ghost join-item" id="hud-fullscreen" title="Fullscreen">
-              <i class="fi fi-rr-expand-arrows text-xs"></i>
-            </button>
+            <div class="tooltip tooltip-left" data-tip="Perbesar">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-left" data-tip="Perkecil">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-left" data-tip="Reset tampilan">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-left" data-tip="Ikuti agen">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-left" data-tip="Layar penuh">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
+            </div>
           </div>
 
           <!-- Speed Controls -->
@@ -149,6 +151,13 @@ export class OfficeView {
           </div>
         </div>
 
+        <!-- Compact live status (DaisyUI badges) -->
+        <div class="office-status absolute bottom-16 left-4 z-20 flex flex-wrap items-center gap-2" id="office-status">
+          <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-user-robot mr-1"></i><span id="os-agents">0</span> agents</span>
+          <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-building mr-1"></i><span id="os-rooms">0</span> rooms</span>
+          <span class="badge badge-sm badge-success font-mono" id="os-runtime">LIVE</span>
+        </div>
+
         <!-- Realtime Activity Ticker HUD (DaisyUI Alert) -->
         <div class="bottom-ticker alert bg-base-100/90 backdrop-blur border border-base-content/10 shadow-xl py-2 px-3.5 rounded-box flex items-center justify-between gap-3">
           <div class="flex items-center gap-2 overflow-hidden">
@@ -189,7 +198,11 @@ export class OfficeView {
     movementEngine.start();
 
     // Subscribe to store updates
+    this.renderOfficeStatus();
     this.cleanupListener = store.subscribe((eventKey, payload) => {
+      if (eventKey === 'agents_loaded' || eventKey === 'agent_updated' || eventKey === 'state_updated' || eventKey === 'runtime_status_changed') {
+        this.renderOfficeStatus();
+      }
       if (eventKey === 'agents_loaded' || eventKey === 'agent_updated') {
         movementEngine.syncAgents(store.getAllAgents());
       }
@@ -524,6 +537,19 @@ export class OfficeView {
    * Hermes runtime disconnected. The initial store default (connected:false
    * with no reason) and plain WebSocket reconnects do NOT gray out agents.
    */
+  renderOfficeStatus() {
+    const a = document.getElementById('os-agents');
+    const r = document.getElementById('os-rooms');
+    const rt = document.getElementById('os-runtime');
+    if (a) a.textContent = String(store.getAllAgents().length || 0);
+    if (r) r.textContent = String(store.state.rooms?.length || 0);
+    if (rt) {
+      const offline = this.isRuntimeOffline();
+      rt.textContent = offline ? 'OFFLINE' : 'LIVE';
+      rt.className = `badge badge-sm font-mono ${offline ? 'badge-error' : 'badge-success'}`;
+    }
+  }
+
   isRuntimeOffline() {
     const rs = store.state.runtimeStatus;
     return Boolean(rs && rs.connected === false && rs.reason);
