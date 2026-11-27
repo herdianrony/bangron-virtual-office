@@ -56,14 +56,15 @@ export function normalizeHermesEvent(rawEvent) {
   if (typeof eventId === 'number') {
     eventId = String(eventId);
   }
-  // SSE `seq` dimulai dari 0 untuk setiap run. Tanpa namespace, event run
+  // SSE `seq`/`id` dimulai dari 0 untuk setiap run. Tanpa namespace, event run
   // berikutnya dianggap duplikat oleh EventRepository (event_id UNIQUE) dan
-  // seluruh transisi state/WS event hilang. Awasi dengan run_id.
-  if ((rawEvent.event_id === undefined || rawEvent.event_id === null) &&
-      (rawEvent.id === undefined || rawEvent.id === null) &&
+  // seluruh transisi state/WS event hilang. Gunakan run_id sebagai namespace
+  // untuk semua event SSE (field `event` adalah penanda SSE).
+  if (rawType && rawEvent.run_id &&
+      (rawEvent.event_id === undefined || rawEvent.event_id === null) &&
       (rawEvent.delivery_id === undefined || rawEvent.delivery_id === null) &&
-      rawEvent.seq !== undefined && rawEvent.run_id) {
-    eventId = `${rawEvent.run_id}:${rawEvent.seq}`;
+      (rawEvent.seq !== undefined || rawEvent.id !== undefined)) {
+    eventId = `${rawEvent.run_id}:${rawEvent.seq !== undefined ? rawEvent.seq : rawEvent.id}`;
   }
   // Timestamp resolution (S3 remediation — deterministic, never silently wrong):
   // - timestamp (native Hermes field) wins over occurred_at when both are present.
