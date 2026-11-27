@@ -11,7 +11,7 @@ export class CameraController {
     this.panX = 0;
     this.panY = 0; // Top-down camera starts with no vertical offset
     this.scale = 1.0;
-    this.minScale = 0.4;
+    this.minScale = 0.12;
     this.maxScale = 2.4;
 
     this.isDragging = false;
