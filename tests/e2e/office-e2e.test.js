@@ -53,7 +53,7 @@ async function loginAsDirector(page) {
   await page.fill('#login-password', DIRECTOR_PASSWORD);
   await page.click('#login-submit-btn');
   // LoginView switches to #/office and reloads on success.
-  await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
+  await page.waitForSelector('#office-scene-host canvas', { timeout: 30000 });
   await page.waitForFunction(
     () => window.store?.state?.user?.role === 'director' && Boolean(window.store?.state?.csrfToken),
     null,
@@ -208,40 +208,31 @@ async function cleanupAgent(context, page, agentId, taskId) {
 /* ------------------------------------------------------------------ */
 
 test.describe('PHASE 3.1 — Real Browser E2E Verification', () => {
-  test('office animation and SVG geometry render without runtime errors', async ({ page }) => {
+  test('office PixiJS scene renders rooms and agents without runtime errors', async ({ page }) => {
     const pageErrors = [];
-    const svgGeometryErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    page.on('console', (message) => {
-      if (message.type() !== 'error') return;
-      const text = message.text();
-      if (/\b<rect> attribute (?:width|height): Expected length/.test(text)) {
-        svgGeometryErrors.push(text);
-      }
-    });
 
     await loginAsDirector(page);
-    await expect(page.locator('#office-svg-canvas')).toBeVisible();
+    await expect(page.locator('#office-scene-host canvas')).toBeVisible();
 
-    // Exercise multiple animation frames and inspect the rendered hit-test
-    // rectangles backed by API workstation records (which have no dimensions).
+    // PixiOfficeScene owns the full scene: one canvas, canonical backend state.
     await page.waitForFunction(() => {
-      const nodes = document.querySelectorAll('#hit-test-layer .td-hit-test-furniture');
-      return nodes.length > 0;
+      const canvas = document.querySelector('#office-scene-host canvas');
+      return canvas && canvas.width > 0 && canvas.height > 0 &&
+        (window.store?.state?.rooms?.length ?? 0) > 0 &&
+        (window.store?.state?.workstations?.length ?? 0) > 0 &&
+        (window.store?.getAllAgents()?.length ?? 0) > 0;
     }, null, { timeout: 15000 });
     expect(pageErrors).toEqual([]);
-    expect(svgGeometryErrors).toEqual([]);
-    const furnitureHitAreas = await page.locator('#hit-test-layer .td-hit-test-furniture').evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        width: Number(node.getAttribute('width')),
-        height: Number(node.getAttribute('height'))
-      }))
-    );
-    expect(furnitureHitAreas.length).toBeGreaterThan(0);
-    expect(furnitureHitAreas.every((area) =>
-      Number.isFinite(area.width) && area.width > 0 &&
-      Number.isFinite(area.height) && area.height > 0
-    )).toBe(true);
+    expect(await page.locator('#office-svg-canvas').count()).toBe(0);
+    const scene = await page.evaluate(() => ({
+      rooms: window.store.state.rooms.length,
+      workstations: window.store.state.workstations.length,
+      agents: window.store.getAllAgents().length
+    }));
+    expect(scene.rooms).toBeGreaterThan(0);
+    expect(scene.workstations).toBeGreaterThan(0);
+    expect(scene.agents).toBeGreaterThan(0);
   });
 
   test('office page loads and renders agents', async ({ page }) => {
@@ -480,7 +471,7 @@ test.describe('PHASE 3.2 — Full Browser Lifecycle E2E', () => {
 
     // Full browser refresh — the session cookie must survive (no re-login).
     await page.reload();
-    await page.waitForSelector('#office-svg-canvas', { timeout: 30000 });
+    await page.waitForSelector('#office-scene-host canvas', { timeout: 30000 });
     await page.waitForFunction(() => window.store?.state?.user?.role === 'director', null, { timeout: 15000 });
 
     // Authoritative snapshot: the failed lifecycle is restored from the

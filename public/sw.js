@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
   '/assets/js/views/settings-view.js', '/assets/js/views/login-view.js',
   '/assets/js/office/topdown-renderer.js', '/assets/js/office/camera.js',
   '/assets/js/office/movement-engine.js', '/assets/js/office/pixi-agents.js',
+  '/assets/js/office/pixi-office-scene.js',
   '/assets/js/realtime/websocket-client.js'
 ];
 
