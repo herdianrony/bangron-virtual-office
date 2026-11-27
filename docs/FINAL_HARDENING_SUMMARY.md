@@ -60,6 +60,24 @@ Approvals and Deliverables hidden from mobile and desktop nav (HTML comments;
 routes, API and data retained and reversible). Core loop in nav:
 Office → Dashboard → Agents → Tasks → Projects → Activities → Settings.
 
+## 7. Per-profile API keys — DIPROVISI (tambahan)
+
+Awalnya tidak dilakukan karena risiko: 10 kredensial baru + perubahan state
+gateway. Ternyata ada jalur aman tanpa restart: tulis `API_SERVER_KEY` unik ke
+`~/.hermes/profiles/<name>/.env` (mode 600), lalu `hermes -p <name> gateway run`
+hanya melakukan re-scan/attach (host gateway tetap PID yang sama, sesi tidak
+putus).
+
+Hasil: 10/10 prefix `/p/<profile>/v1/models` mengembalikan **200** dengan model
+id sesuai nama profil (backend, devops, frontend, qa, sm-copywriter,
+sm-designer, sm-scheduler, sm-strategist, tech-lead, ui-ux). `/p/<profile>/v1/capabilities`
+juga 200. Nilai kunci tidak pernah dicetak ke chat maupun log.
+
+Catatan: sinkronisasi roster tetap memakai direktori `~/.hermes/profiles/`
+sebagai sumber daftar nama, karena API Server tidak punya endpoint enumerasi
+profil. Kunci per profil kini tersedia untuk dispatch/run yang di-scope ke
+profil tertentu bila diperlukan.
+
 ## Verification
 
 - `npm test`: **254 passed / 0 failed** (29 files)
