@@ -231,18 +231,6 @@ export class PixiOfficeScene {
         .stroke({ width: 1, color: 0x94a3b8, alpha: 0.5 });
       furniture.addChild(g);
       this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
-      // Detail furnitur dari tileset Limezu (petakan tipe ke tile sederhana).
-      if (this.tileTexture) {
-        const tile = new Sprite(this.tileTexture);
-        tile.anchor.set(0.5);
-        tile.width = w * 0.85;
-        tile.height = h * 0.85;
-        tile.position.set(mapped.x, mapped.y - h / 2);
-        tile.tint = 0xffffff;
-        tile.alpha = 0.55;
-        furniture.addChild(tile);
-      }
-
     }
   }
 
@@ -305,14 +293,17 @@ export class PixiOfficeScene {
     }
 
     const tagText = new Text({ text: '', style: { fontSize: 10, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
-    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 26);
+    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 26); tagText.visible = false;
     const tagBg = new Graphics();
+    tagBg.visible = false;
     root.addChild(tagBg, tagText);
 
     root.eventMode = 'static';
     root.cursor = 'pointer';
     root.hitArea = new Circle(0, -2, 20);
     root.on('pointertap', (e) => { e.stopPropagation(); this.onAgentClick?.(agent.id); });
+    root.on('pointerover', () => { tagText.visible = true; tagBg.visible = true; });
+    root.on('pointerout', () => { tagText.visible = false; tagBg.visible = false; });
 
     return { root, aura, sprite, vector, tagText, tagBg, dept, phase: 0, setIndex: sprite ? Math.abs([...agent.id].reduce((a,c)=>a+c.charCodeAt(0),0)) % this.spriteSets.length : 0 };
   }
