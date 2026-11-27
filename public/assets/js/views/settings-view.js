@@ -215,7 +215,8 @@ export class SettingsView {
         ).join('');
       }
 
-      this.renderModels(res.models || []);
+      const allModels = res.models || [];
+      this.renderModels(allModels.slice(0, 30), allModels.length);
       this.renderSessions(res.sessions?.recent || []);
       this.renderJobs(res.jobs || []);
     } catch (err) {
@@ -226,12 +227,15 @@ export class SettingsView {
   setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
   setClass(id, cls) { const el = document.getElementById(id); if (el) el.className = `stat-value text-xl ${cls}`; }
 
-  renderModels(models) {
+  renderModels(models, total = models.length) {
     const tb = document.getElementById('models-tbody');
     if (!tb) return;
-    tb.innerHTML = models.length
+    const note = total > models.length
+      ? `<tr><td colspan="3" class="text-xs text-base-content/60">Menampilkan ${models.length} dari ${total} model. Gunakan filter provider di API.</td></tr>`
+      : '';
+    tb.innerHTML = (models.length
       ? models.map((m) => `<tr><td class="font-mono text-xs">${m.id}</td><td>${m.provider || '—'}</td><td><span class="badge badge-success badge-sm">active</span></td></tr>`).join('')
-      : `<tr><td colspan="3" class="text-center text-base-content/60">No models advertised</td></tr>`;
+      : `<tr><td colspan="3" class="text-center text-base-content/60">No models advertised</td></tr>`) + note;
   }
 
   renderSessions(sessions) {

@@ -24,21 +24,10 @@ export class ActivitiesView {
         </div>
 
         <div class="card bg-base-200 border border-base-content/10 shadow-xl rounded-box overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="table table-zebra table-sm w-full text-xs">
-              <thead>
-                <tr class="bg-base-300/50 text-base-content/70 border-b border-base-content/10">
-                  <th>Timestamp</th>
-                  <th>Agent / Actor</th>
-                  <th>Event Type</th>
-                  <th>Room Location</th>
-                  <th>Activity Description</th>
-                </tr>
-              </thead>
-              <tbody id="activities-table-body">
-                <tr><td colspan="5" class="text-center text-base-content/50 py-6">Loading audit stream...</td></tr>
-              </tbody>
-            </table>
+          <div class="card-body p-5">
+            <ul class="timeline timeline-vertical timeline-compact" id="activities-timeline">
+              <li><div class="timeline-start text-xs text-base-content/60"><span class="loading loading-dots loading-sm"></span></div></li>
+            </ul>
           </div>
         </div>
       </div>
@@ -51,39 +40,36 @@ export class ActivitiesView {
   async loadActivities() {
     try {
       const data = await api.get('/api/activities?limit=100');
-      const tbody = document.getElementById('activities-table-body');
+      const tbody = document.getElementById('activities-timeline');
       if (!tbody) return;
 
       if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-base-content/50 py-6">No activities recorded yet.</td></tr>`;
+        tbody.innerHTML = `<li><div class="alert alert-info text-xs">No activities recorded yet.</div></li>`;
         return;
       }
 
-      tbody.innerHTML = data.map((item) => `
-        <tr class="hover:bg-base-300/40">
-          <td class="font-mono text-primary text-[11px] whitespace-nowrap">
+      tbody.innerHTML = data.slice(0, 50).map((item) => `
+        <li>
+          <div class="timeline-start text-[10px] font-mono text-base-content/60 whitespace-nowrap">
             ${item.occurred_at ? new Date(item.occurred_at).toLocaleTimeString() : '-'}
-          </td>
-          <td>
-            <div class="font-bold text-base-content flex items-center gap-1.5">
-              <i class="fi fi-rr-user-robot text-base-content/40 text-xs"></i>
-              <span>${item.agent_name || 'System Orchestrator'}</span>
+          </div>
+          <div class="timeline-middle">
+            <i class="fi fi-rr-circle-small text-primary text-xs"></i>
+          </div>
+          <div class="timeline-end timeline-box bg-base-100/70 border-base-content/10 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="avatar placeholder">
+                <div class="bg-primary/10 text-primary rounded-full w-6 h-6"><i class="fi fi-rr-user-robot text-[10px]"></i></div>
+              </div>
+              <strong class="text-base-content">${item.agent_name || 'System Orchestrator'}</strong>
+              ${item.department ? `<span class="badge badge-ghost badge-xs">${item.department}</span>` : ''}
+              ${(() => { const et = item.activity_type || item.event_type || 'unknown'; return `<span class="badge badge-xs font-mono uppercase ${this.getEventBadge(et)}">${et.replace(/_/g, ' ')}</span>`; })()}
+              <span class="text-base-content/60">${item.room_name || 'Office Floor'}</span>
             </div>
-            ${item.department ? `<div class="text-[10px] text-base-content/50">${item.department}</div>` : ''}
-          </td>
-          <td>
-        ${(() => { const et = item.activity_type || item.event_type || 'unknown'; return `
-          <span class="badge badge-xs font-mono uppercase ${this.getEventBadge(et)}">
-            ${et.replace(/_/g, ' ')}
-          </span>`; })()}
-          </td>
-          <td class="text-base-content/70">
-            ${item.room_name || '<span class="text-base-content/40 italic">Office Floor</span>'}
-          </td>
-          <td class="text-base-content/90">
-            ${item.description}
-          </td>
-        </tr>
+            <div class="mt-1 text-base-content/80">${item.description}</div>
+          </div>
+          <hr />
+        </li>
       `).join('');
     } catch (err) {
       console.error('Failed to load activities:', err);
