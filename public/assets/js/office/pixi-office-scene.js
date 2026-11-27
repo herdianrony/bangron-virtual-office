@@ -226,9 +226,11 @@ export class PixiOfficeScene {
       const y = Number.isFinite(Number(a.y)) ? Number(a.y) : Number(a.position_y) || 300;
       const mapped = mapToVisual(x, y, this.state.rooms, this.state.building);
       rig.root.position.set(mapped.x, mapped.y);
-      rig.halo.clear().circle(0, 0, 20).stroke({ width: 2.4, color: colorToNumber(STATUS_HALO_COLORS[a.status] || '#6b7280'), alpha: 0.85 });
+      const haloColor = colorToNumber(STATUS_HALO_COLORS[a.status] || '#6b7280');
+      rig.aura.clear().circle(0, -2, 22).stroke({ width: 2.4, color: haloColor, alpha: 0.85 });
+      this._animateAgentRig(rig, a);
       rig.tagText.text = String(a.display_name || a.id).replace('[DEMO] ', '').slice(0, 20);
-      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 6, -12, rig.tagText.width + 12, 18, 4).fill({ color: 0x0f172a, alpha: 0.9 });
+      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 6, 23, rig.tagText.width + 12, 18, 4).fill({ color: 0x0f172a, alpha: 0.9 });
     }
     for (const [id, rig] of this.agents) {
       if (!seen.has(id)) { rig.root.destroy({ children: true }); this.agents.delete(id); }
@@ -238,23 +240,67 @@ export class PixiOfficeScene {
   _buildAgent(agent) {
     const root = new Container();
     const dept = colorToNumber(DEPARTMENT_COLORS[agent.department] || '#3b82f6');
-    const shadow = new Graphics().ellipse(0, 3, 18, 13).fill({ color: 0x000000, alpha: 0.3 });
-    const halo = new Graphics();
-    const body = new Graphics().ellipse(0, 0, 13, 10).fill(dept).stroke({ width: 2, color: 0x334155 });
-    const head = new Graphics().circle(0, -2, 9).fill(0x2b241f);
-    const face = new Graphics().ellipse(0, -2, 4.5, 3).fill(0xe0a87e);
-    const tagText = new Text({ text: '', style: { fontSize: 18, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
-    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 38);
+    const skin = 0xf1c27d;
+    const hair = 0x2b241f;
+
+    // Ground shadow + status aura
+    const shadow = new Graphics().ellipse(0, 10, 17, 7).fill({ color: 0x000000, alpha: 0.28 });
+    const aura = new Graphics().circle(0, 0, 22).stroke({ width: 2.4, color: dept, alpha: 0.5 });
+    root.addChild(shadow, aura);
+
+    // Legs (animated by walk phase)
+    const legL = new Graphics().roundRect(-7, 2, 6, 13, 2).fill(0x334155);
+    const legR = new Graphics().roundRect(1, 2, 6, 13, 2).fill(0x334155);
+    root.addChild(legL, legR);
+
+    // Body: shirt in department color + collar + arms
+    const body = new Graphics()
+      .roundRect(-12, -10, 24, 22, 7)
+      .fill(dept)
+      .stroke({ width: 1.5, color: 0x1e293b, alpha: 0.6 });
+    body.poly([-5, -10, 0, -4, 5, -10]).fill({ color: 0xffffff, alpha: 0.55 });
+    const armL = new Graphics().roundRect(-17, -8, 6, 16, 3).fill(dept);
+    const armR = new Graphics().roundRect(11, -8, 6, 16, 3).fill(dept);
+    root.addChild(armL, body, armR);
+
+    // Head: hair cap + face + eyes (direction-aware peeking)
+    const head = new Graphics();
+    head.circle(0, -14, 10).fill(hair);
+    head.ellipse(0, -12, 7.5, 8).fill(skin);
+    head.arc(0, -12, 8, Math.PI, 0).fill(hair);
+    const eyes = new Graphics();
+    root.addChild(head, eyes);
+
+    // Name tag
+    const tagText = new Text({ text: '', style: { fontSize: 15, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
+    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 32);
     const tagBg = new Graphics();
-    root.addChild(shadow, halo, body, head, face, tagBg, tagText);
+    root.addChild(tagBg, tagText);
+
     root.eventMode = 'static';
     root.cursor = 'pointer';
-    root.hitArea = new Circle(0, 0, 16);
-    root.on('pointertap', (e) => {
-      e.stopPropagation();
-      this.onAgentClick?.(agent.id);
-    });
-    return { root, halo, tagText, tagBg };
+    root.hitArea = new Circle(0, -2, 20);
+    root.on('pointertap', (e) => { e.stopPropagation(); this.onAgentClick?.(agent.id); });
+
+    return { root, aura, legL, legR, armL, armR, eyes, body, tagText, tagBg, dept, phase: 0 };
+  }
+
+  _animateAgentRig(rig, agent) {
+    const moving = !!agent.moving;
+    if (moving) rig.phase = (rig.phase || 0) + 0.25;
+    const swing = moving ? Math.sin(rig.phase) * 5 : 0;
+    rig.legL.y = 2 + swing;
+    rig.legR.y = 2 - swing;
+    rig.armL.rotation = moving ? -swing * 0.04 : 0;
+    rig.armR.rotation = moving ? swing * 0.04 : 0;
+
+    // Eyes peek toward heading (top-down 4-way)
+    const dir = String(agent.direction || 'SE');
+    const dx = dir.includes('E') ? 3 : dir.includes('W') ? -3 : 0;
+    const dy = dir.includes('S') ? 1 : dir.includes('N') ? -2 : 0;
+    rig.eyes.clear()
+      .circle(-3 + dx, -13 + dy, 1.6).fill(0x0f172a)
+      .circle(3 + dx, -13 + dy, 1.6).fill(0x0f172a);
   }
 
   applyCamera(t = {}) {
