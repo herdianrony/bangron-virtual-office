@@ -84,6 +84,9 @@ export class StateReconciler {
     // Real-world tolerance: ID dari Hermes eksternal bisa jadi belum terdaftar di
     // database kantor (instance/task dibuat terpisah). Jangan biarkan FK constraint
     // menggagalkan ingest — resolusikan eksistensi dulu, lewati yang tidak dikenal.
+    // Simpan apakah event membawa identitas eksplisit: kalau ya, jangan pernah
+    // menggantinya dengan instance lain (security: hindari salah atribusi event).
+    const hadExplicitInstance = Boolean(instance_id);
     if (instance_id && !this.agentRepo.getInstanceById(instance_id)) {
       logger.warn({ instanceId: instance_id }, 'Unknown agent instance in Hermes event; falling back to identity resolution');
       instance_id = null;
@@ -93,6 +96,18 @@ export class StateReconciler {
       const knownSession = this.agentRepo.getSessionById(session_id);
       if (knownSession && knownSession.agent_instance_id) {
         instance_id = knownSession.agent_instance_id;
+      }
+    }
+    // 1b) SSE events dari API Server tidak membawa identitas agen (hanya
+    //     task_id dari runTaskMap). Resolusi paling aman: instance yang
+    //     sudah di-assign ke task tersebut. Hanya dipakai bila event TIDAK
+    //     membawa identitas eksplisit — event dengan instance_id eksplisit
+    //     tidak boleh dialihkan ke agent lain.
+    if (!instance_id && !hadExplicitInstance && task_id) {
+      const task = this.taskRepo.getTaskById(task_id);
+      if (task && task.assigned_agent_id && this.agentRepo.getInstanceById(task.assigned_agent_id)) {
+        instance_id = task.assigned_agent_id;
+        logger.info({ instanceId: instance_id, taskId: task_id }, 'Resolved agent identity from assigned task');
       }
     }
     // 2) Map profil eksplisit (HERMES_PROFILE_AGENT_MAP) → auto-provision nama

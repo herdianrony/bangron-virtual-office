@@ -151,6 +151,9 @@ describe('G6.1 — StateReconciler Agent Identity Safety', () => {
   });
 
   it('should skip agent state updates when identity cannot be resolved', () => {
+    // Task WITHOUT an assigned agent — no identity source at all
+    taskRepo.createTask({ id: 'task_unassigned_api', title: 'Unassigned probe' });
+
     // Event with unknown profile/agent_id, no explicit mapping, no default instance
     const result = reconciler.reconcile({
       event_id: 'evt_ambiguous_001',
@@ -158,15 +161,16 @@ describe('G6.1 — StateReconciler Agent Identity Safety', () => {
       instance_id: null,
       profile: null,
       agent_id: null,
-      task_id: 'task_test_api',
+      task_id: 'task_unassigned_api',
       payload: {}
     });
 
     expect(result.status).toBe('processed');
 
     // No agent state should change - task stays pending since no instance resolved
-    const task = taskRepo.getTaskById('task_test_api');
+    const task = taskRepo.getTaskById('task_unassigned_api');
     expect(task.status).toBe('pending');
+    expect(agentRepo.getInstanceById('inst_test_dev').status).toBe('idle');
   });
 
   it('should not silently update demo agent for live Hermes events', () => {
