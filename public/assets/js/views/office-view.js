@@ -24,24 +24,24 @@ export class OfficeView {
       <div class="office-container td-mode bg-base-300">
         <!-- Floating viewport toolbar: compact DaisyUI join, top-right -->
         <div class="office-hud absolute top-3 right-3 z-20">
-          <div class="join shadow-lg bg-base-100/85 backdrop-blur border border-base-content/10 rounded-box">
+          <div class="join shadow-lg bg-base-100/95 backdrop-blur border border-base-content/20 rounded-box">
             <div class="tooltip tooltip-bottom" data-tip="Mode malam / siang">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-night" title="Mode malam / siang"><i class="fi fi-rr-moon text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-night" title="Mode malam / siang"><i class="fi fi-rr-moon text-xs"></i></button>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Perbesar">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Perkecil">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Reset tampilan">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Ikuti agen">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Layar penuh">
-              <button class="btn btn-sm btn-ghost join-item" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
+              <button class="btn btn-sm btn-ghost join-item text-base-content" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
             </div>
           </div>
         </div>
