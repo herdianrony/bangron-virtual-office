@@ -17,13 +17,13 @@
  */
 import { Application, Container, Graphics, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, colorToNumber } from './palette.js';
+import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, mapToVisual } from './visual-layout.js';
 
-const FLOOR = 0xe8e2d4;
-const CORRIDOR = 0xd6cbae;
-const WALL = 0x6b6252;
-const ROOM_STROKE = 0x8a7f6a;
-const DOOR_GAP = 24;
-const NIGHT = 0x0b1220;
+const FLOOR = 0x0f172a;        // deep navy "control room" floor
+const FLOOR_GRID = 0x1e293b;
+const CORRIDOR = 0x1e3a5f;
+const WALL = 0x334155;
+const NIGHT = 0x020617;
 
 const DEFAULT_BUILDING = { x: 14, y: 14, w: 992, h: 668 };
 const DEFAULT_CORRIDORS = [
@@ -101,6 +101,8 @@ export class PixiOfficeScene {
     this._applyCamera();
   }
 
+  getBounds() { return VISUAL_BOUNDS; }
+
   setState(state = {}) {
     this.state = {
       rooms: state.rooms || [],
@@ -113,71 +115,68 @@ export class PixiOfficeScene {
 
   _drawScene() {
     const { floor, corridor, room, furniture, label } = this.layers;
-    floor.removeChildren().forEach((c) => c.destroy());
-    corridor.removeChildren().forEach((c) => c.destroy());
-    room.removeChildren().forEach((c) => c.destroy());
-    furniture.removeChildren().forEach((c) => c.destroy());
-    label.removeChildren().forEach((c) => c.destroy());
+    for (const layer of [floor, corridor, room, furniture, label]) {
+      layer.removeChildren().forEach((c) => c.destroy());
+    }
     this.hitAreas = [];
 
-    const b = this.state.building;
-    floor.addChild(new Graphics().rect(b.x, b.y, b.w, b.h).fill(FLOOR).stroke({ width: 3, color: WALL }));
+    const b = VISUAL_BOUNDS;
+    const base = new Graphics().roundRect(b.x, b.y, b.w, b.h, 18).fill(FLOOR).stroke({ width: 3, color: WALL });
+    for (let gx = b.x + 40; gx < b.x + b.w; gx += 40) {
+      base.moveTo(gx, b.y).lineTo(gx, b.y + b.h).stroke({ width: 0.5, color: FLOOR_GRID, alpha: 0.5 });
+    }
+    for (let gy = b.y + 40; gy < b.y + b.h; gy += 40) {
+      base.moveTo(b.x, gy).lineTo(b.x + b.w, gy).stroke({ width: 0.5, color: FLOOR_GRID, alpha: 0.5 });
+    }
+    floor.addChild(base);
 
-    for (const c of this.state.corridors) {
+    for (const c of VISUAL_CORRIDORS) {
       corridor.addChild(new Graphics()
-        .rect(c.x, c.y, c.w, c.h)
-        .fill({ color: CORRIDOR })
-        .stroke({ width: 0.6, color: 0xb9ad92 }));
+        .roundRect(c.x, c.y, c.w, c.h, 8)
+        .fill({ color: CORRIDOR, alpha: 0.85 })
+        .stroke({ width: 1, color: 0x38bdf8, alpha: 0.25 }));
       this.hitAreas.push({ rect: new Rectangle(c.x, c.y, c.w, c.h), kind: 'corridor', name: `Koridor ${c.id}` });
     }
 
-    for (const r of this.state.rooms) {
-      const x = Number(r.position_x ?? r.px) || 0;
-      const y = Number(r.position_y ?? r.py) || 0;
-      const w = Number(r.width ?? r.w) || 60;
-      const h = Number(r.height ?? r.h) || 60;
-      const dept = r.department || 'General';
-      const color = colorToNumber(DEPARTMENT_COLORS[dept] || '#6b7280');
-
+    const canonical = new Map(this.state.rooms.map((r) => [r.id, r]));
+    for (const [id, v] of Object.entries(VISUAL_ROOMS)) {
+      const meta = canonical.get(id) || { name: id, department: 'General', door: { side: 'S' } };
+      const dept = meta.department || 'General';
+      const accent = colorToNumber(v.accent || DEPARTMENT_COLORS[dept] || '#6b7280');
       const g = new Graphics()
-        .rect(x, y, w, h)
-        .fill({ color, alpha: 0.16 })
-        .stroke({ width: 2, color: ROOM_STROKE });
+        .roundRect(v.x, v.y, v.w, v.h, 12)
+        .fill({ color: accent, alpha: 0.13 })
+        .stroke({ width: 2, color: accent, alpha: 0.55 });
+      g.rect(v.x + 12, v.y, Math.min(v.w - 24, 70), 4).fill({ color: accent, alpha: 0.9 });
+      g.circle(v.x + v.w - 18, v.y + 18, 4).fill({ color: accent, alpha: 0.8 });
       room.addChild(g);
-      this._drawDoor(g, r, x, y, w, h);
-      this.hitAreas.push({ rect: new Rectangle(x, y, w, h), kind: 'room', id: r.id, name: `${r.name} — ${dept}` });
+      this.hitAreas.push({ rect: new Rectangle(v.x, v.y, v.w, v.h), kind: 'room', id, name: `${meta.name || id} — ${dept}` });
 
-      const text = new Text({
-        text: r.name || r.id,
-        style: { fontSize: 17, fontWeight: '700', fill: 0x334155, fontFamily: 'sans-serif', align: 'center' }
+      const title = new Text({
+        text: String(meta.name || id).toUpperCase(),
+        style: { fontSize: 13, fontWeight: '800', fill: 0xe2e8f0, fontFamily: 'sans-serif', letterSpacing: 1 }
       });
-      text.resolution = 2;
-      text.anchor.set(0.5);
-      text.position.set(x + w / 2, y + h / 2 - 6);
-      label.addChild(text);
+      title.resolution = 2; title.anchor.set(0.5, 0);
+      title.position.set(v.x + v.w / 2, v.y + 14);
+      label.addChild(title);
+      const sub = new Text({
+        text: dept,
+        style: { fontSize: 10, fontWeight: '600', fill: 0x94a3b8, fontFamily: 'sans-serif' }
+      });
+      sub.resolution = 2; sub.anchor.set(0.5, 0);
+      sub.position.set(v.x + v.w / 2, v.y + 32);
+      label.addChild(sub);
     }
 
     for (const ws of this.state.workstations) {
-      const x = Number(ws.position_x);
-      const y = Number(ws.position_y);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const mapped = mapToVisual(Number(ws.position_x), Number(ws.position_y), this.state.rooms, this.state.building);
       const [w, h] = FURNITURE[ws.workstation_type || 'desk'] || FURNITURE.desk;
       const g = new Graphics()
-        .roundRect(x - w / 2, y - h / 2, w, h, 4)
-        .fill({ color: 0xb9956a })
-        .stroke({ width: 1, color: 0x7c5f3e });
+        .roundRect(mapped.x - w / 2, mapped.y - h / 2, w, h, 5)
+        .fill({ color: 0x64748b, alpha: 0.55 })
+        .stroke({ width: 1, color: 0x94a3b8, alpha: 0.5 });
       furniture.addChild(g);
-      this.hitAreas.push({ rect: new Rectangle(x - w / 2, y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
-    }
-  }
-
-  _drawDoor(g, room, x, y, w, h) {
-    const side = room.door?.side || 'S';
-    const mid = doorPoint(room);
-    g.rect(mid.x - DOOR_GAP / 2, mid.y - 1, DOOR_GAP, 2).fill({ color: FLOOR });
-    if (side === 'N' || side === 'S') {
-      g.moveTo(mid.x - DOOR_GAP / 2, mid.y).lineTo(mid.x - DOOR_GAP / 2, mid.y + (side === 'N' ? -14 : 14))
-        .stroke({ width: 1, color: WALL });
+      this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
     }
   }
 
@@ -195,7 +194,8 @@ export class PixiOfficeScene {
       }
       const x = Number.isFinite(Number(a.x)) ? Number(a.x) : Number(a.position_x) || 300;
       const y = Number.isFinite(Number(a.y)) ? Number(a.y) : Number(a.position_y) || 300;
-      rig.root.position.set(x, y);
+      const mapped = mapToVisual(x, y, this.state.rooms, this.state.building);
+      rig.root.position.set(mapped.x, mapped.y);
       rig.halo.clear().circle(0, 0, 20).stroke({ width: 2.4, color: colorToNumber(STATUS_HALO_COLORS[a.status] || '#6b7280'), alpha: 0.85 });
       rig.tagText.text = String(a.display_name || a.id).replace('[DEMO] ', '').slice(0, 20);
       rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 6, -12, rig.tagText.width + 12, 18, 4).fill({ color: 0x0f172a, alpha: 0.9 });

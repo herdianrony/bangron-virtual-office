@@ -158,7 +158,7 @@ export class OfficeView {
       corridors: [{ id: 'corr_main', x: 30, y: 295, w: 940, h: 45 }],
       building: topdownRenderer.BOUNDS
     });
-    this.camera.fitBounds(topdownRenderer.BOUNDS);
+    this.camera.fitBounds(this.scene.getBounds());
 
     // Bind Controls
     this.initControls();
@@ -263,7 +263,7 @@ export class OfficeView {
     document.getElementById('hud-zoom-out')?.addEventListener('click', () => this.camera.zoomOut());
     document.getElementById('hud-reset')?.addEventListener('click', () => {
       this.camera.reset();
-      this.camera.fitBounds(topdownRenderer.BOUNDS);
+      this.camera.fitBounds(this.scene.getBounds());
     });
 
     // Follow Agent toggle
