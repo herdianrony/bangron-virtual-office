@@ -238,9 +238,9 @@ export class PixiOfficeScene {
       if (tex) {
         const icon = new Sprite(tex);
         icon.anchor.set(0.5);
-        icon.width = w * 0.9;
-        icon.height = h * 0.9;
-        icon.position.set(mapped.x, mapped.y);
+        icon.width = Math.min(26, w * 0.5);
+        icon.height = Math.min(26, h * 0.5);
+        icon.position.set(mapped.x, mapped.y + 10);
         furniture.addChild(icon);
       } else {
         furniture.addChild(new Graphics().circle(mapped.x, mapped.y, 4).fill({ color: 0x94a3b8, alpha: 0.6 }));
