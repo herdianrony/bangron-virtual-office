@@ -96,7 +96,14 @@ export class PixiOfficeScene {
           }
         }
       }
-      this.tileTexture = Texture.from('/assets/sprites/limezu/workstation.png');
+      this.furnitureTextures = {
+        desk: Texture.from('/assets/sprites/limezu/f_desk.png'),
+        terminal: Texture.from('/assets/sprites/limezu/f_shelf.png'),
+        conference_table: Texture.from('/assets/sprites/limezu/f_table.png'),
+        couch: Texture.from('/assets/sprites/limezu/f_vase.png'),
+        library_table: Texture.from('/assets/sprites/limezu/f_shelf.png'),
+        coffee_bar: Texture.from('/assets/sprites/limezu/f_vase.png')
+      };
     } catch (err) {
       console.warn('[Office] Limezu sprites unavailable, using vector fallback', err);
       this.spriteFrames = null;
@@ -225,11 +232,19 @@ export class PixiOfficeScene {
     for (const ws of this.state.workstations) {
       const mapped = mapToVisual(Number(ws.position_x), Number(ws.position_y), this.state.rooms, this.state.building);
       const [w, h] = FURNITURE[ws.workstation_type || 'desk'] || FURNITURE.desk;
-      // Workstation marker: small status dot instead of a raw atlas tile.
-      const marker = new Graphics()
-        .circle(mapped.x, mapped.y, 4)
-        .fill({ color: 0x94a3b8, alpha: 0.6 });
-      furniture.addChild(marker);
+      // Real furniture sprite from Limezu Modern Interiors tileset.
+      const type = ws.workstation_type || 'desk';
+      const tex = this.furnitureTextures?.[type] || this.furnitureTextures?.desk;
+      if (tex) {
+        const icon = new Sprite(tex);
+        icon.anchor.set(0.5);
+        icon.width = w * 0.9;
+        icon.height = h * 0.9;
+        icon.position.set(mapped.x, mapped.y);
+        furniture.addChild(icon);
+      } else {
+        furniture.addChild(new Graphics().circle(mapped.x, mapped.y, 4).fill({ color: 0x94a3b8, alpha: 0.6 }));
+      }
       this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
     }
   }
