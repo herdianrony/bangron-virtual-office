@@ -53,7 +53,7 @@ export class OfficeView {
           </div>
 
           <!-- Viewport Navigation Controls -->
-          <div class="join join-vertical shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10">
+          <div class="join join-vertical shadow-2xl bg-base-100/70 backdrop-blur border border-base-content/10 rounded-box">
             <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perbesar" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
             <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perkecil" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
             <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Reset tampilan" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
