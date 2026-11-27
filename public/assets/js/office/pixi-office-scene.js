@@ -192,11 +192,17 @@ export class PixiOfficeScene {
       }
     }
 
-    // Two meeting-desk clusters in the open-space area.
+    // Open-space desk clusters rendered with real Limezu furniture sprites.
+    const deskTex = this.furnitureTextures?.conference_table;
     for (const [cx, cy] of [[135, 280], [335, 280], [135, 455], [335, 455]]) {
-      furniture.addChild(new Graphics().roundRect(cx - 55, cy - 34, 110, 68, 8).fill({ color: 0xc49b6a, alpha: 0.8 }).stroke({ width: 1, color: 0x92704e }));
-      for (const dx of [-42, 42]) for (const dy of [-22, 22]) {
-        furniture.addChild(new Graphics().circle(cx + dx, cy + dy, 9).fill({ color: 0x64748b, alpha: 0.75 }));
+      if (deskTex) {
+        const d = new Sprite(deskTex);
+        d.anchor.set(0.5);
+        d.width = 64;
+        d.height = 48;
+        d.position.set(cx, cy);
+        d.alpha = 0.95;
+        furniture.addChild(d);
       }
     }
 
@@ -299,7 +305,7 @@ export class PixiOfficeScene {
       const setIndex = Math.abs([...agent.id].reduce((a,c)=>a+c.charCodeAt(0),0)) % this.spriteSets.length;
       sprite = new Sprite(this.spriteFrames[`${setIndex}-S-0`]);
       sprite.anchor.set(0.5, 0.82);
-      sprite.scale.set(1.7);
+      sprite.scale.set(2.2);
       sprite.tint = dept;
       root.addChild(sprite);
     } else {
