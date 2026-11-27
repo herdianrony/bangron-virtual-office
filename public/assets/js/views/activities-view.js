@@ -72,9 +72,10 @@ export class ActivitiesView {
             ${item.department ? `<div class="text-[10px] text-base-content/50">${item.department}</div>` : ''}
           </td>
           <td>
-            <span class="badge badge-xs font-mono uppercase ${this.getEventBadge(item.event_type)}">
-              ${item.event_type}
-            </span>
+        ${(() => { const et = item.activity_type || item.event_type || 'unknown'; return `
+          <span class="badge badge-xs font-mono uppercase ${this.getEventBadge(et)}">
+            ${et.replace(/_/g, ' ')}
+          </span>`; })()}
           </td>
           <td class="text-base-content/70">
             ${item.room_name || '<span class="text-base-content/40 italic">Office Floor</span>'}

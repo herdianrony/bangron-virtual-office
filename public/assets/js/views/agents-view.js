@@ -174,7 +174,7 @@ export class AgentsView {
               </div>
 
               <div class="text-xs text-base-content/80 min-h-[36px] line-clamp-2">
-                ${agent.active_task_title ? `<strong class="text-info">Working:</strong> ${agent.active_task_title}` : '<span class="text-base-content/40 italic">Idle — available for task assignment.</span>'}
+                ${agent.active_task_title ? `<strong class="text-info">Working:</strong> ${agent.active_task_title}` : '<span class="text-base-content/70 italic">Idle — available for task assignment.</span>'}
               </div>
 
               <div class="flex flex-wrap gap-1">

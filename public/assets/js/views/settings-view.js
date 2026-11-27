@@ -168,8 +168,10 @@ export class SettingsView {
       const res = await api.get('/api/integrations/hermes/status');
       const badge = document.getElementById('hermes-badge');
       if (badge) {
-        badge.innerText = res.status;
-        badge.className = res.connected ? 'badge badge-sm badge-success font-mono' : 'badge badge-sm badge-info font-mono';
+        const runtime = res.runtime || {};
+        const status = runtime.status || res.status || 'UNKNOWN';
+        badge.innerText = status;
+        badge.className = runtime.connected ? 'badge badge-sm badge-success font-mono' : 'badge badge-sm badge-info font-mono';
       }
     } catch {
       const badge = document.getElementById('hermes-badge');

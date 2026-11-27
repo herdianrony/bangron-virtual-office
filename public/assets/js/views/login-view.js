@@ -98,6 +98,8 @@ export class LoginView {
           store.setState({ user: res.user });
           // Re-establish WebSocket now that user is authenticated
           realtimeClient.connect();
+          // Clear any stale session-expiry toasts before showing the success toast
+          toast.clear();
           // Restore previous view hash without full page reload
           const preLoginHash = sessionStorage.getItem('preLoginHash') || '#/office';
           sessionStorage.removeItem('preLoginHash');

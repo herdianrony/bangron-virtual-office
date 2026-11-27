@@ -93,6 +93,12 @@ export class ToastService {
     setTimeout(() => toast.remove(), 300);
   }
 
+  clear() {
+    const container = this.ensureContainer();
+    if (!container) return;
+    [...container.children].forEach((t) => this.dismiss(t));
+  }
+
   success(message, options) { return this.createToast('success', message, options); }
   error(message, options) { return this.createToast('error', message, options); }
   warning(message, options) { return this.createToast('warning', message, options); }
