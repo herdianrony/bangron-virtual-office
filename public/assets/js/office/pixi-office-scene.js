@@ -96,7 +96,7 @@ export class PixiOfficeScene {
           }
         }
       }
-      this.tileTexture = Texture.from('/assets/sprites/limezu/interiors-32.png');
+      this.tileTexture = Texture.from('/assets/sprites/limezu/workstation.png');
     } catch (err) {
       console.warn('[Office] Limezu sprites unavailable, using vector fallback', err);
       this.spriteFrames = null;
@@ -225,11 +225,13 @@ export class PixiOfficeScene {
     for (const ws of this.state.workstations) {
       const mapped = mapToVisual(Number(ws.position_x), Number(ws.position_y), this.state.rooms, this.state.building);
       const [w, h] = FURNITURE[ws.workstation_type || 'desk'] || FURNITURE.desk;
-      const g = new Graphics()
-        .roundRect(mapped.x - w / 2, mapped.y - h / 2, w, h, 5)
-        .fill({ color: 0x64748b, alpha: 0.55 })
-        .stroke({ width: 1, color: 0x94a3b8, alpha: 0.5 });
-      furniture.addChild(g);
+      const tile = new Sprite(this.tileTexture);
+      tile.anchor.set(0.5);
+      tile.width = w * 0.8;
+      tile.height = h * 0.8;
+      tile.position.set(mapped.x, mapped.y);
+      tile.alpha = 0.75;
+      furniture.addChild(tile);
       this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
     }
   }
