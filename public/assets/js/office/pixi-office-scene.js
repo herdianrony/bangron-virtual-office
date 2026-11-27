@@ -17,7 +17,7 @@
  */
 import { Application, Container, Graphics, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, colorToNumber } from './palette.js';
-import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual } from './visual-layout.js';
+import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_ZONES, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual } from './visual-layout.js';
 
 const FLOOR = VISUAL_THEME.floor;
 const FLOOR_GRID = VISUAL_THEME.grid;
@@ -129,6 +129,36 @@ export class PixiOfficeScene {
       base.moveTo(b.x, gy).lineTo(b.x + b.w, gy).stroke({ width: 0.5, color: FLOOR_GRID, alpha: 0.5 });
     }
     floor.addChild(base);
+
+    // Architectural zones from the reference floor plan (carport, lobby, etc.)
+    for (const z of VISUAL_ZONES) {
+      const zc = colorToNumber(z.accent);
+      const g = new Graphics().roundRect(z.x, z.y, z.w, z.h, 6).fill({ color: zc, alpha: 0.1 }).stroke({ width: 1.5, color: zc, alpha: 0.35 });
+      room.addChild(g);
+      const t = new Text({ text: z.label, style: { fontSize: 10, fontWeight: '700', fill: 0x475569, fontFamily: 'sans-serif' } });
+      t.resolution = 2; t.anchor.set(0.5, 1); t.position.set(z.x + z.w / 2, z.y + z.h - 8);
+      label.addChild(t);
+    }
+
+    // Cars & motorcycles in the carport.
+    const carport = VISUAL_ZONES.find((z) => z.id === 'carport');
+    if (carport) {
+      for (const cx of [carport.x + 140, carport.x + 300]) {
+        room.addChild(new Graphics().roundRect(cx - 42, carport.y + 30, 84, 150, 26).fill({ color: 0x94a3b8, alpha: 0.35 }).stroke({ width: 1.5, color: 0x64748b }));
+        room.addChild(new Graphics().roundRect(cx - 28, carport.y + 52, 56, 52, 14).fill({ color: 0x64748b, alpha: 0.5 }));
+      }
+      for (const mx of [carport.x + 540, carport.x + 610, carport.x + 680]) {
+        room.addChild(new Graphics().ellipse(mx, carport.y + 130, 12, 30).fill({ color: 0x94a3b8, alpha: 0.45 }).stroke({ width: 1, color: 0x64748b }));
+      }
+    }
+
+    // Two meeting-desk clusters in the open-space area.
+    for (const [cx, cy] of [[135, 280], [335, 280], [135, 455], [335, 455]]) {
+      furniture.addChild(new Graphics().roundRect(cx - 55, cy - 34, 110, 68, 8).fill({ color: 0xc49b6a, alpha: 0.8 }).stroke({ width: 1, color: 0x92704e }));
+      for (const dx of [-42, 42]) for (const dy of [-22, 22]) {
+        furniture.addChild(new Graphics().circle(cx + dx, cy + dy, 9).fill({ color: 0x64748b, alpha: 0.75 }));
+      }
+    }
 
     for (const c of VISUAL_CORRIDORS) {
       corridor.addChild(new Graphics()
