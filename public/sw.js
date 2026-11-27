@@ -3,9 +3,9 @@
  * Offline caching, background sync, push notifications ready
  */
 
-const CACHE_NAME = 'bangron-vo-v7';
+const CACHE_NAME = 'bangron-vo-v8';
 const STATIC_ASSETS = [
-  '/', '/index.html', '/manifest.json', '/assets/css/office.css', '/assets/sprites/agents.png', '/assets/sprites/limezu/adam-run.png', '/assets/sprites/limezu/amelia-run.png', '/assets/sprites/limezu/alex-run.png', '/assets/sprites/limezu/bob-run.png', '/assets/sprites/limezu/interiors-32.png', '/assets/sprites/limezu/f_desk.png', '/assets/sprites/limezu/f_shelf.png', '/assets/sprites/limezu/f_table.png', '/assets/sprites/limezu/f_vase.png', '/assets/sprites/limezu/f_globe.png', '/assets/sprites/limezu/workstation.png',
+  '/', '/index.html', '/manifest.json', '/assets/css/office.css', '/assets/sprites/agents.png', '/assets/sprites/limezu/adam-run.png', '/assets/sprites/limezu/amelia-run.png', '/assets/sprites/limezu/alex-run.png', '/assets/sprites/limezu/bob-run.png', '/assets/sprites/limezu/interiors-32.png', '/assets/sprites/limezu/f_desk.png', '/assets/sprites/limezu/f_shelf.png', '/assets/sprites/limezu/f_table.png', '/assets/sprites/limezu/f_vase.png', '/assets/sprites/limezu/f_globe.png', 
   '/assets/js/core/api.js', '/assets/js/core/store.js',
   '/assets/js/core/toast.js', '/assets/js/core/skeleton.js',
   '/assets/js/core/empty-state.js', '/assets/js/core/confirm-dialog.js',
