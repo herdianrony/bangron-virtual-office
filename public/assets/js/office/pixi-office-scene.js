@@ -17,13 +17,13 @@
  */
 import { Application, Container, Graphics, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, colorToNumber } from './palette.js';
-import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, mapToVisual } from './visual-layout.js';
+import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual } from './visual-layout.js';
 
-const FLOOR = 0x0f172a;        // deep navy "control room" floor
-const FLOOR_GRID = 0x1e293b;
-const CORRIDOR = 0x1e3a5f;
-const WALL = 0x334155;
-const NIGHT = 0x020617;
+const FLOOR = VISUAL_THEME.floor;
+const FLOOR_GRID = VISUAL_THEME.grid;
+const CORRIDOR = VISUAL_THEME.corridor;
+const WALL = VISUAL_THEME.wall;
+const NIGHT = VISUAL_THEME.night;
 
 const DEFAULT_BUILDING = { x: 14, y: 14, w: 992, h: 668 };
 const DEFAULT_CORRIDORS = [
@@ -153,14 +153,14 @@ export class PixiOfficeScene {
       this.hitAreas.push({ rect: new Rectangle(v.x, v.y, v.w, v.h), kind: 'room', id, name: `${meta.name || id} — ${dept}` });
 
       const title = new Text({
-        text: String(meta.name || id).toUpperCase(),
+        text: String(v.label || meta.name || id).toUpperCase(),
         style: { fontSize: 13, fontWeight: '800', fill: 0xe2e8f0, fontFamily: 'sans-serif', letterSpacing: 1 }
       });
       title.resolution = 2; title.anchor.set(0.5, 0);
       title.position.set(v.x + v.w / 2, v.y + 14);
       label.addChild(title);
       const sub = new Text({
-        text: dept,
+        text: v.sub || dept,
         style: { fontSize: 10, fontWeight: '600', fill: 0x94a3b8, fontFamily: 'sans-serif' }
       });
       sub.resolution = 2; sub.anchor.set(0.5, 0);

@@ -1,40 +1,47 @@
 /**
- * Bangron Virtual Office — redesigned visual floor plan ("Studio Loft").
+ * Bangron Virtual Office — "Rumah Studio" visual floor plan.
  *
- * Backend `office-layout.js` tetap menjadi source of truth untuk navigasi,
- * pintu, dan koordinat agen. Modul ini hanya memetakan ruang kanonik ke
- * geometri visual baru, sehingga desain bisa diimprovisasi bebas tanpa
- * mengubah state/pathfinding/demo engine.
+ * Rumah rintilan yang dipakai sebagai studio: garasi koding, dapur kopi,
+ * ruang keluarga, meja makan, sudut desain, teras depan, rak server.
+ *
+ * Backend `office-layout.js` tetap source of truth untuk navigasi, pintu, dan
+ * koordinat agen. Modul ini hanya memetakan ruang kanonik ke geometri visual,
+ * sehingga desain bebas tanpa mengubah state/pathfinding/demo engine.
  */
 
 export const VISUAL_BOUNDS = { x: 16, y: 16, w: 1148, h: 748 };
 
 export const VISUAL_ROOMS = {
-  room_dir:       { x: 40,  y: 40,  w: 250, h: 268, accent: '#eab308', icon: 'fi-rr-crown' },
-  room_meeting:   { x: 300, y: 40,  w: 230, h: 268, accent: '#3b82f6', icon: 'fi-rr-comments' },
-  room_ops:       { x: 620, y: 40,  w: 240, h: 268, accent: '#6366f1', icon: 'fi-rr-orbit' },
-  room_uiux:      { x: 870, y: 40,  w: 210, h: 124, accent: '#06b6d4', icon: 'fi-rr-palette' },
-  room_qa:        { x: 870, y: 176, w: 210, h: 132, accent: '#f59e0b', icon: 'fi-rr-shield-check' },
-
-  room_dev:       { x: 40,  y: 398, w: 220, h: 166, accent: '#10b981', icon: 'fi-rr-code-branch' },
-  room_research:  { x: 270, y: 398, w: 130, h: 166, accent: '#8b5cf6', icon: 'fi-rr-search-alt' },
-  room_marketing: { x: 410, y: 398, w: 120, h: 166, accent: '#f97316', icon: 'fi-rr-bullhorn' },
-  room_library:   { x: 620, y: 398, w: 230, h: 166, accent: '#14b8a6', icon: 'fi-rr-book-open' },
-  room_coffee:    { x: 860, y: 398, w: 220, h: 166, accent: '#d97706', icon: 'fi-rr-coffee' },
-
-  room_lounge:    { x: 40,  y: 584, w: 250, h: 158, accent: '#ec4899', icon: 'fi-rr-couch' },
-  room_creative:  { x: 300, y: 584, w: 230, h: 158, accent: '#a855f7', icon: 'fi-rr-palette' },
-  room_reception: { x: 620, y: 584, w: 230, h: 158, accent: '#0ea5e9', icon: 'fi-rr-door-open' },
-  room_server:    { x: 860, y: 584, w: 220, h: 158, accent: '#64748b', icon: 'fi-rr-server' }
+  room_dir:       { x: 40,  y: 40,  w: 230, h: 220, accent: '#b45309', label: 'Ruang Kerja', sub: 'Studio Direktur' },
+  room_meeting:   { x: 280, y: 40,  w: 250, h: 220, accent: '#0d9488', label: 'Meja Makan', sub: 'Diskusi Tim' },
+  room_ops:       { x: 540, y: 40,  w: 270, h: 220, accent: '#c2410c', label: 'Ruang Keluarga', sub: 'Orkestrasi' },
+  room_uiux:      { x: 820, y: 40,  w: 160, h: 104, accent: '#0891b2', label: 'Sudut Desain', sub: 'UI/UX' },
+  room_qa:        { x: 820, y: 156, w: 160, h: 104, accent: '#ca8a04', label: 'Rak Uji', sub: 'QA & Security' },
+  room_dev:       { x: 40,  y: 272, w: 250, h: 180, accent: '#16a34a', label: 'Garasi Koding', sub: 'Backend + Frontend' },
+  room_research:  { x: 300, y: 272, w: 150, h: 180, accent: '#7c3aed', label: 'Rak Riset', sub: 'Research' },
+  room_marketing: { x: 460, y: 272, w: 150, h: 180, accent: '#ea580c', label: 'Sudut Konten', sub: 'Marketing' },
+  room_library:   { x: 620, y: 272, w: 220, h: 180, accent: '#0f766e', label: 'Perpustakaan', sub: 'Buku & Referensi' },
+  room_coffee:    { x: 850, y: 272, w: 230, h: 180, accent: '#a16207', label: 'Dapur & Kopi', sub: 'Pantry' },
+  room_lounge:    { x: 40,  y: 464, w: 250, h: 170, accent: '#db2777', label: 'Sofa Santai', sub: 'Istirahat' },
+  room_creative:  { x: 300, y: 464, w: 250, h: 170, accent: '#9333ea', label: 'Studio Kreatif', sub: 'Brand & Visual' },
+  room_reception: { x: 560, y: 464, w: 230, h: 170, accent: '#0284c7', label: 'Teras Depan', sub: 'Pintu Masuk' },
+  room_server:    { x: 800, y: 464, w: 280, h: 170, accent: '#475569', label: 'Rak Server', sub: 'Infrastructure' }
 };
 
 export const VISUAL_CORRIDORS = [
-  { id: 'corr_main', x: 40, y: 320, w: 1040, h: 62 },
-  { id: 'corr_south', x: 40, y: 566, w: 1040, h: 18 },
-  { id: 'corr_cross', x: 542, y: 40, w: 62, h: 702 }
+  { id: 'corr_main', x: 40, y: 262, w: 1040, h: 10 },
+  { id: 'corr_south', x: 40, y: 454, w: 1040, h: 10 },
+  { id: 'corr_cross', x: 520, y: 40, w: 12, h: 594 }
 ];
 
-/** rooms: canonical backend rooms. x/y: canonical world coords. */
+export const VISUAL_THEME = {
+  floor: 0x2a1c16,
+  grid: 0x3d2a20,
+  corridor: 0x6b4f35,
+  wall: 0x8b6b4a,
+  night: 0x120c08
+};
+
 export function findCanonicalRoom(x, y, rooms = []) {
   return rooms.find((r) => {
     const px = Number(r.position_x); const py = Number(r.position_y);
@@ -44,11 +51,6 @@ export function findCanonicalRoom(x, y, rooms = []) {
   }) || null;
 }
 
-/**
- * Map a canonical world point into the redesigned visual plan.
- * Positions inside a room are mapped proportionally into that room's new
- * rectangle; corridor points are scaled linearly across the whole building.
- */
 export function mapToVisual(x, y, rooms = [], bounds = null) {
   const room = findCanonicalRoom(x, y, rooms);
   if (room && VISUAL_ROOMS[room.id]) {
@@ -69,4 +71,4 @@ export function mapToVisual(x, y, rooms = [], bounds = null) {
   };
 }
 
-export default { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, mapToVisual, findCanonicalRoom };
+export default { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual, findCanonicalRoom };
