@@ -225,13 +225,11 @@ export class PixiOfficeScene {
     for (const ws of this.state.workstations) {
       const mapped = mapToVisual(Number(ws.position_x), Number(ws.position_y), this.state.rooms, this.state.building);
       const [w, h] = FURNITURE[ws.workstation_type || 'desk'] || FURNITURE.desk;
-      const tile = new Sprite(this.tileTexture);
-      tile.anchor.set(0.5);
-      tile.width = w * 0.8;
-      tile.height = h * 0.8;
-      tile.position.set(mapped.x, mapped.y);
-      tile.alpha = 0.75;
-      furniture.addChild(tile);
+      // Workstation marker: small status dot instead of a raw atlas tile.
+      const marker = new Graphics()
+        .circle(mapped.x, mapped.y, 4)
+        .fill({ color: 0x94a3b8, alpha: 0.6 });
+      furniture.addChild(marker);
       this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
     }
   }
