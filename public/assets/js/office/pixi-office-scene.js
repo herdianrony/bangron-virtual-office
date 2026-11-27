@@ -247,7 +247,7 @@ export class PixiOfficeScene {
       rig.aura.clear().circle(0, -2, 22).stroke({ width: 2.4, color: haloColor, alpha: 0.85 });
       this._animateAgentRig(rig, a);
       rig.tagText.text = String(a.display_name || a.id).replace('[DEMO] ', '').slice(0, 20);
-      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 6, 23, rig.tagText.width + 12, 18, 4).fill({ color: 0x0f172a, alpha: 0.9 });
+      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 4, 20, rig.tagText.width + 8, 13, 3).fill({ color: 0x0f172a, alpha: 0.9 });
     }
     for (const [id, rig] of this.agents) {
       if (!seen.has(id)) { rig.root.destroy({ children: true }); this.agents.delete(id); }
@@ -267,7 +267,7 @@ export class PixiOfficeScene {
     if (this.spriteFrames) {
       sprite = new Sprite(this.spriteFrames.S0);
       sprite.anchor.set(0.5, 0.82);
-      sprite.scale.set(0.62);
+      sprite.scale.set(0.52);
       sprite.tint = dept;
       root.addChild(sprite);
     } else {
@@ -280,12 +280,12 @@ export class PixiOfficeScene {
         new Graphics().circle(0, -14, 10).fill(0x2b241f),
         new Graphics().ellipse(0, -12, 7.5, 8).fill(0xf1c27d)
       );
-      vector.scale.set(0.62);
+      vector.scale.set(0.52);
       root.addChild(vector);
     }
 
-    const tagText = new Text({ text: '', style: { fontSize: 15, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
-    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 32);
+    const tagText = new Text({ text: '', style: { fontSize: 10, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
+    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 26);
     const tagBg = new Graphics();
     root.addChild(tagBg, tagText);
 
