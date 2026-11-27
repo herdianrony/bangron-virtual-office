@@ -22,51 +22,27 @@ export class OfficeView {
   async render() {
     this.container.innerHTML = `
       <div class="office-container td-mode bg-base-300">
-        <!-- Demo Control Ribbon (DaisyUI Component) -->
-        <div class="demo-ribbon card bg-base-100/95 backdrop-blur border border-info/30 shadow-2xl p-2.5 flex-row items-center gap-3">
-          <span class="badge badge-info badge-sm font-mono font-bold tracking-wider">DEMO PIPELINE</span>
-          <span class="demo-title hidden xl:inline text-xs font-semibold text-base-content flex items-center gap-1.5" id="demo-step-text">
-            <i class="fi fi-rr-diagram-project text-info"></i>
-            Simulated Multi-Agent Pipeline
-          </span>
-          <button class="btn btn-primary btn-xs gap-1.5 shadow" id="btn-demo-step">
-            <span>Next Step</span>
-            <i class="fi fi-rr-arrow-right text-[10px]"></i>
-          </button>
-          <button class="btn btn-accent btn-xs gap-1.5 shadow" id="btn-demo-auto" title="Toggle automatic task-driven walks">
-            <i class="fi fi-rr-play text-xs"></i>
-            <span>Auto-Play: On</span>
-          </button>
-          <button class="btn btn-ghost btn-xs text-base-content/70 hover:text-base-content" id="btn-demo-reset">
-            <i class="fi fi-rr-refresh text-xs"></i>
-            <span>Reset</span>
-          </button>
-        </div>
-
-        <!-- Floating HUD Controls (DaisyUI Join Component) -->
-        <div class="office-hud">
-          <!-- Day/Night toggle -->
-          <div class="tooltip tooltip-left" data-tip="Mode malam / siang">
-            <button class="btn btn-sm btn-ghost btn-square shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10" id="hud-night" title="Mode malam / siang">
-              <i class="fi fi-rr-moon text-xs"></i>
-            </button>
-          </div>
-
-          <!-- Viewport Navigation Controls -->
-          <div class="join join-vertical shadow-2xl bg-base-100/70 backdrop-blur border border-base-content/10 rounded-box">
-            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perbesar" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
-            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Perkecil" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
-            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Reset tampilan" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
-            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Ikuti agen" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
-            <button class="btn btn-sm btn-ghost join-item tooltip tooltip-left" data-tip="Layar penuh" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
-          </div>
-
-          <!-- Speed Controls -->
-          <div class="join shadow-2xl bg-base-100/90 backdrop-blur border border-base-content/10 p-1">
-            <span class="text-[10px] text-base-content/60 font-bold uppercase tracking-wider px-2 flex items-center">Speed</span>
-            <button class="btn btn-xs join-item speed-btn active btn-primary" data-speed="1">1x</button>
-            <button class="btn btn-xs join-item speed-btn btn-ghost" data-speed="2">2x</button>
-            <button class="btn btn-xs join-item speed-btn btn-ghost" data-speed="4">4x</button>
+        <!-- Floating viewport toolbar: compact DaisyUI join, top-right -->
+        <div class="office-hud absolute top-3 right-3 z-20">
+          <div class="join shadow-lg bg-base-100/85 backdrop-blur border border-base-content/10 rounded-box">
+            <div class="tooltip tooltip-bottom" data-tip="Mode malam / siang">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-night" title="Mode malam / siang"><i class="fi fi-rr-moon text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-bottom" data-tip="Perbesar">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-in" title="Zoom In"><i class="fi fi-rr-zoom-in text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-bottom" data-tip="Perkecil">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-zoom-out" title="Zoom Out"><i class="fi fi-rr-zoom-out text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-bottom" data-tip="Reset tampilan">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-reset" title="Reset View"><i class="fi fi-rr-crosshairs text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-bottom" data-tip="Ikuti agen">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-follow" title="Toggle Follow Agent"><i class="fi fi-rr-eye text-xs"></i></button>
+            </div>
+            <div class="tooltip tooltip-bottom" data-tip="Layar penuh">
+              <button class="btn btn-sm btn-ghost join-item" id="hud-fullscreen" title="Fullscreen"><i class="fi fi-rr-expand-arrows text-xs"></i></button>
+            </div>
           </div>
         </div>
 
@@ -125,7 +101,7 @@ export class OfficeView {
         </div>
 
         <!-- Compact live status (DaisyUI badges) -->
-        <div class="office-status absolute bottom-16 right-4 z-20 flex flex-wrap items-center justify-end gap-2" id="office-status">
+        <div class="office-status absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2" id="office-status">
           <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-user-robot mr-1"></i><span id="os-agents">0</span> agents</span>
           <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-building mr-1"></i><span id="os-rooms">0</span> rooms</span>
           <span class="badge badge-sm badge-success font-mono" id="os-runtime">LIVE</span>
@@ -282,59 +258,6 @@ export class OfficeView {
     document.addEventListener('fullscreenchange', this.onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', this.onFullscreenChange);
 
-    // Demo auto-play toggle: agents walk according to their active tasks
-    const autoBtn = document.getElementById('btn-demo-auto');
-    if (autoBtn) {
-      autoBtn.addEventListener('click', async () => {
-        try {
-          const current = autoBtn.dataset.enabled === 'true';
-          const result = await api.post('/api/demo/autoplay', { enabled: !current });
-          this.syncAutoplayButton(!!result.enabled);
-        } catch (err) {
-          alert('Auto-play error: ' + err.message);
-        }
-      });
-      api
-        .get('/api/demo/status')
-        .then((status) => this.syncAutoplayButton(!!(status && status.autoplay && status.autoplay.enabled)))
-        .catch(() => {});
-    }
-
-    // Speed Selector
-    document.querySelectorAll('.speed-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.speed-btn').forEach((b) => {
-          b.classList.remove('active', 'btn-primary');
-          b.classList.add('btn-ghost');
-        });
-        e.target.classList.add('active', 'btn-primary');
-        e.target.classList.remove('btn-ghost');
-        const speed = parseInt(e.target.dataset.speed, 10);
-        store.setState({ simulationSpeed: speed });
-      });
-    });
-
-    // Demo Step
-    document.getElementById('btn-demo-step')?.addEventListener('click', async () => {
-      try {
-        const result = await api.post('/api/demo/step');
-        const text = document.getElementById('demo-step-text');
-        if (text) {
-          text.innerHTML = `<i class="fi fi-rr-bolt text-info"></i> [Step ${result.step}] ${result.action}`;
-        }
-      } catch (err) {
-        alert('Demo step error: ' + err.message);
-      }
-    });
-
-    // Demo Reset
-    document.getElementById('btn-demo-reset')?.addEventListener('click', async () => {
-      if (confirm('Reset demo state to baseline?')) {
-        await api.post('/api/demo/reset');
-        await this.loadInitialOfficeState();
-      }
-    });
-
     // Inspector close button
     const closeInspector = () => {
       const inspector = document.getElementById('agent-inspector');
@@ -442,19 +365,6 @@ export class OfficeView {
     const icon = btn.querySelector('i');
     if (icon) icon.className = fsElement ? 'fi fi-rr-compress text-xs' : 'fi fi-rr-expand-arrows text-xs';
     btn.title = fsElement ? 'Exit fullscreen (Esc)' : 'Fullscreen';
-  }
-
-  syncAutoplayButton(enabled) {
-    const btn = document.getElementById('btn-demo-auto');
-    if (!btn) return;
-    btn.dataset.enabled = String(enabled);
-    const icon = btn.querySelector('i');
-    const label = btn.querySelector('span');
-    if (icon) icon.className = enabled ? 'fi fi-rr-pause text-xs' : 'fi fi-rr-play text-xs';
-    if (label) label.textContent = enabled ? 'Auto-Play: On' : 'Auto-Play: Off';
-    btn.classList.toggle('btn-accent', enabled);
-    btn.classList.toggle('btn-ghost', !enabled);
-    btn.title = enabled ? 'Pause automatic task-driven walks' : 'Resume automatic task-driven walks';
   }
 
   /**

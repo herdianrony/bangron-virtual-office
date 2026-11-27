@@ -80,8 +80,7 @@ export class CameraController {
   fitBounds(bounds, fillRatio = 0.98) {
     const rect = this.svg.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    const ribbonInset = 48; // ruang untuk demo ribbon di atas
-    const usableH = Math.max(120, rect.height - ribbonInset);
+    const usableH = Math.max(120, rect.height);
     const scale = Math.max(
       this.minScale,
       Math.min(this.maxScale, Math.min(rect.width / bounds.w, usableH / bounds.h) * fillRatio)
@@ -89,7 +88,7 @@ export class CameraController {
     this.scale = scale;
     const hudInset = rect.width >= 1024 ? 90 : 0;
     this.panX = (rect.width - hudInset) / 2 - (bounds.x + bounds.w / 2) * scale;
-    this.panY = ribbonInset + usableH / 2 - (bounds.y + bounds.h / 2) * scale;
+    this.panY = usableH / 2 - (bounds.y + bounds.h / 2) * scale;
     this.updateTransform();
   }
 
