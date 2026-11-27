@@ -37,9 +37,9 @@
 9. Journal: `Terminal event detected, stopping poll` → `SSE event polling stopped` (poll dihentikan bersih, tidak reconnect).
 10. Output Hermes nyata: "Hermes Agent aktif dan siap menerima tugas, dengan seluruh layanan ... dalam keadaan normal dan tanpa ada perubahan".
 
-## 4. Temuan sampingan (non-blocker)
+## 4. Temuan sampingan
 
-- Agent instance `inst_hermes_default` tetap `queued` setelah task selesai. Normalizer tidak mengisi `instance_id` pada event Hermes (`agent_events.instance_id = NULL`), sehingga reconciler tidak bisa menjalankan transisi `completed → idle`. Task dan event sudah benar; ini hanya avatar state di UI. Perbaikan: petakan `agent_profile` → `agent_instance` saat normalisasi.
+- **Temuan sampingan (SUDAH DIPERBAIKI):** agent sempat tetap `queued` setelah task selesai — normalizer tidak mengisi `instance_id` pada event SSE. Fix di commit `27a13fb`: `StateReconciler` kini me-resolve `instance_id` dari `assigned_agent_id` task bila event tidak membawa identitas eksplisit (event dengan `instance_id` eksplisit tidak boleh dialihkan). Diverifikasi live: `Resolved agent identity from assigned task` → task `task_mwyd6uzj66518560c80f` `completed`, agent `inst_hermes_default` **`idle`**. Test: `tests/unit/g6-identity-from-task.test.js` (2 pass), suite 244/244.
 - `HERMES_RUNTIME_VERIFIED` kini `true`; docs yang menyatakan "must be false (gate closed)" adalah teks rencana pra-verifikasi dan tidak lagi berlaku.
 
 ## 5. Kesimpulan
