@@ -17,16 +17,34 @@ import logger from '../../utils/logger.js';
  * lalu menyiarkan `agent.created` via WebSocket.
  */
 
+// Pemetaan eksplisit lebih dulu: nama profil Hermes yang mengandung underscore
+// atau kata majemuk tidak selalu cocok dengan regex word-boundary di bawah.
+const EXPLICIT_PLACEMENT = {
+  devops: { department: 'DevOps & Automation', roomId: 'room_server' },
+  'prof-dev-backend': { department: 'Development', roomId: 'room_dev' },
+  'prof_dev_backend': { department: 'Development', roomId: 'room_dev' },
+  'sm-scheduler': { department: 'Marketing', roomId: 'room_marketing' },
+  'sm_scheduler': { department: 'Marketing', roomId: 'room_marketing' },
+  'sm-strategist': { department: 'Marketing', roomId: 'room_marketing' },
+  'sm_strategist': { department: 'Marketing', roomId: 'room_marketing' }
+};
+
 // Heuristik penempatan ruang kerja berdasarkan nama agen (Inggris + Indonesia).
 const ROOM_HINTS = [
   { re: /\b(ui|ux)\b|ui\/ux/i, department: 'UI/UX', roomId: 'room_uiux' },
-  { re: /\b(dev|developer|backend|frontend|engineer|fullstack|program\w*|coder|api|pengembang|koder)\b/i, department: 'Development', roomId: 'room_dev' },
+  { re: /\bdevops\b|dev-ops/i, department: 'DevOps & Automation', roomId: 'room_server' },
+  { re: /\b(prof[_-]?dev|dev|developer|backend|frontend|engineer|fullstack|program\w*|coder|api|pengembang|koder)\b/i, department: 'Development', roomId: 'room_dev' },
   { re: /\b(qa|test|security|audit|keamanan|pengujian)\b/i, department: 'Quality Assurance', roomId: 'room_qa' },
   { re: /\b(research|analyst|analysis|data|riset|peneliti)\b/i, department: 'Research', roomId: 'room_research' },
   { re: /\b(design\w*|creative|brand|visual|art|artist|illustrat\w*|desain)\b/i, department: 'Creative Studio', roomId: 'room_creative' },
-  { re: /\b(marketing|content|growth|seo|copywrit\w*|social|pemasaran|konten|penulis)\b/i, department: 'Marketing', roomId: 'room_marketing' },
+  { re: /\b(marketing|content|growth|seo|copywrit\w*|social|pemasaran|konten|penulis|scheduler|strategist|copywriter)\b/i, department: 'Marketing', roomId: 'room_marketing' },
   { re: /\b(orchestr\w*|ops|operations|manager|coordinat\w*|supervisor|lead|director|koordinator)\b/i, department: 'Operations', roomId: 'room_ops' }
 ];
+
+export function explicitPlacement(name) {
+  const key = String(name || '').toLowerCase().trim();
+  return EXPLICIT_PLACEMENT[key] || null;
+}
 
 const DEFAULT_PLACEMENT = { department: 'General', roomId: 'room_lounge' };
 
@@ -63,6 +81,8 @@ export class HermesAgentProvisioner {
       const byDept = this.db.prepare('SELECT id FROM office_rooms WHERE department = ? ORDER BY id LIMIT 1').get(explicitDepartment);
       if (byDept) return { department: explicitDepartment, roomId: byDept.id };
     }
+    const explicit = explicitPlacement(name);
+    if (explicit) return { ...explicit };
     for (const hint of ROOM_HINTS) {
       if (hint.re.test(name)) return { department: hint.department, roomId: hint.roomId };
     }
