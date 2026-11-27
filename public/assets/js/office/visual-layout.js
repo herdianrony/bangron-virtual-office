@@ -9,19 +9,25 @@
  * modul ini hanya adapter visual.
  */
 
-export const VISUAL_BOUNDS = { x: 16, y: 16, w: 980, h: 1180 };
+// Denah referensi (portrait 980x1180) diregangkan ke stage landscape agar
+// memanfaatkan layar: sumbu X diperlebar, sumbu Y dipadatkan.
+const REF = { x: 16, y: 16, w: 980, h: 1180 };
+const SX = 1.55, SY = 0.62;
+export const VISUAL_BOUNDS = { x: 16, y: 16, w: 1560, h: 760 };
+const stretch = (o) => ({ ...o, x: REF.x + (o.x - REF.x) * SX, y: REF.y + (o.y - REF.y) * SY, w: o.w * SX, h: o.h * SY });
 
 // Zona arsitektural (bukan ruang kanonik) — digambar sebagai dekorasi scene.
-export const VISUAL_ZONES = [
+export const VISUAL_ZONES_RAW = [
   { id: 'carport', label: 'CARPORT & PARKIR MOTOR', x: 40, y: 930, w: 900, h: 240, accent: '#64748b' },
   { id: 'lobby', label: 'LOBBY MASUK', x: 690, y: 700, w: 250, h: 210, accent: '#0ea5e9' },
   { id: 'toilet', label: '2 TOILET KANTOR', x: 690, y: 70, w: 250, h: 250, accent: '#94a3b8' },
   { id: 'pantry', label: 'PANTRY & AREA KOPI', x: 440, y: 180, w: 240, h: 220, accent: '#a16207' },
   { id: 'open', label: 'AREA KERJA OPEN-SPACE', x: 40, y: 200, w: 390, h: 690, accent: '#b45309' }
 ];
+export const VISUAL_ZONES = VISUAL_ZONES_RAW.map(stretch);
 
 // 14 ruang kanonik dipetakan ke zona denah (id backend tetap sama).
-export const VISUAL_ROOMS = {
+const VISUAL_ROOMS_RAW = {
   room_dir:       { x: 40,  y: 40,  w: 250, h: 140, accent: '#65a30d', label: 'TAMAN', sub: 'Area Hijau' },
   room_meeting:   { x: 690, y: 400, w: 250, h: 290, accent: '#0891b2', label: 'RUANG MEETING', sub: '8 Kursi' },
   room_ops:       { x: 440, y: 40,  w: 240, h: 130, accent: '#a16207', label: 'PANTRY', sub: 'Area Kopi' },
@@ -37,12 +43,14 @@ export const VISUAL_ROOMS = {
   room_reception: { x: 690, y: 700, w: 250, h: 210, accent: '#0284c7', label: 'LOBBY MASUK', sub: 'Pintu Utama' },
   room_server:    { x: 690, y: 70,  w: 250, h: 250, accent: '#475569', label: 'SERVER & TOILET', sub: 'Infrastructure' }
 };
+export const VISUAL_ROOMS = Object.fromEntries(Object.entries(VISUAL_ROOMS_RAW).map(([k,v]) => [k, stretch(v)]));
 
-export const VISUAL_CORRIDORS = [
+export const VISUAL_CORRIDORS_RAW = [
   { id: 'corr_main', x: 40, y: 355, w: 900, h: 18 },
   { id: 'corr_south', x: 40, y: 905, w: 900, h: 18 },
   { id: 'corr_cross', x: 430, y: 40, w: 18, h: 880 }
 ];
+export const VISUAL_CORRIDORS = VISUAL_CORRIDORS_RAW.map(stretch);
 
 export const VISUAL_THEME = {
   floor: 0xf1ede3,
