@@ -114,6 +114,7 @@ export class OfficeView {
     const host = document.getElementById('office-scene-host');
     this.scene = new PixiOfficeScene();
     await this.scene.init(host);
+    window.__officeScene = this.scene; // debug hook for sprite verification
     this.scene.onAgentClick = (id) => this.openAgentInspector(id);
     this.scene.setNight(this.nightMode);
 
