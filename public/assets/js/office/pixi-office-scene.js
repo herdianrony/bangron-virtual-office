@@ -149,7 +149,7 @@ export class PixiOfficeScene {
 
       const text = new Text({
         text: r.name || r.id,
-        style: { fontSize: 11, fontWeight: '700', fill: 0x334155, fontFamily: 'sans-serif', align: 'center' }
+        style: { fontSize: 17, fontWeight: '700', fill: 0x334155, fontFamily: 'sans-serif', align: 'center' }
       });
       text.resolution = 2;
       text.anchor.set(0.5);
@@ -196,9 +196,9 @@ export class PixiOfficeScene {
       const x = Number.isFinite(Number(a.x)) ? Number(a.x) : Number(a.position_x) || 300;
       const y = Number.isFinite(Number(a.y)) ? Number(a.y) : Number(a.position_y) || 300;
       rig.root.position.set(x, y);
-      rig.halo.clear().circle(0, 0, 13).stroke({ width: 1.8, color: colorToNumber(STATUS_HALO_COLORS[a.status] || '#6b7280'), alpha: 0.85 });
+      rig.halo.clear().circle(0, 0, 20).stroke({ width: 2.4, color: colorToNumber(STATUS_HALO_COLORS[a.status] || '#6b7280'), alpha: 0.85 });
       rig.tagText.text = String(a.display_name || a.id).replace('[DEMO] ', '').slice(0, 20);
-      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 4, -9, rig.tagText.width + 8, 12, 3).fill({ color: 0x0f172a, alpha: 0.88 });
+      rig.tagBg.clear().roundRect(-rig.tagText.width / 2 - 6, -12, rig.tagText.width + 12, 18, 4).fill({ color: 0x0f172a, alpha: 0.9 });
     }
     for (const [id, rig] of this.agents) {
       if (!seen.has(id)) { rig.root.destroy({ children: true }); this.agents.delete(id); }
@@ -208,13 +208,13 @@ export class PixiOfficeScene {
   _buildAgent(agent) {
     const root = new Container();
     const dept = colorToNumber(DEPARTMENT_COLORS[agent.department] || '#3b82f6');
-    const shadow = new Graphics().ellipse(0, 2, 10, 7).fill({ color: 0x000000, alpha: 0.3 });
+    const shadow = new Graphics().ellipse(0, 3, 18, 13).fill({ color: 0x000000, alpha: 0.3 });
     const halo = new Graphics();
-    const body = new Graphics().ellipse(0, 0, 7.5, 5.5).fill(dept).stroke({ width: 1.2, color: 0x334155 });
-    const head = new Graphics().circle(0, -1, 5).fill(0x2b241f);
-    const face = new Graphics().ellipse(0, -1, 2.6, 1.7).fill(0xe0a87e);
-    const tagText = new Text({ text: '', style: { fontSize: 7.5, fontWeight: '600', fill: '#f8fafc', fontFamily: 'sans-serif' } });
-    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 23);
+    const body = new Graphics().ellipse(0, 0, 13, 10).fill(dept).stroke({ width: 2, color: 0x334155 });
+    const head = new Graphics().circle(0, -2, 9).fill(0x2b241f);
+    const face = new Graphics().ellipse(0, -2, 4.5, 3).fill(0xe0a87e);
+    const tagText = new Text({ text: '', style: { fontSize: 12, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
+    tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 38);
     const tagBg = new Graphics();
     root.addChild(shadow, halo, body, head, face, tagBg, tagText);
     root.eventMode = 'static';
