@@ -12,7 +12,7 @@
  * Pixi world container, so both layers stay pixel-aligned. The SVG has no
  * viewBox, so SVG user units == CSS pixels == Pixi screen units.
  */
-import { Application, Container, Graphics, Sprite, Texture, Text, Rectangle, Assets } from '../vendor/pixi.mjs';
+import { Application, Container, Graphics, Sprite, Texture, Text, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, shade } from './palette.js';
 
 const NIGHT_COLOR = 0x0d1522;
@@ -38,6 +38,15 @@ function hashIndex(id, mod) {
 // Face peek offset by heading (top-down), identical to the old SVG renderer.
 const FACE_DIR = { NE: [0, -3.4], SE: [3.4, 0], SW: [0, 3.4], NW: [-3.4, 0] };
 const PULSE_STATUSES = new Set(['working', 'thinking', 'collaborating']);
+
+function loadTexture(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(Texture.from(img));
+    img.onerror = () => reject(new Error('Failed to load image: ' + url));
+    img.src = url;
+  });
+}
 
 export class PixiAgentLayer {
   constructor() {
@@ -88,7 +97,7 @@ export class PixiAgentLayer {
 
     // Slice character run sheets into per-direction, per-frame textures.
     this.charFrames = await Promise.all(CHARACTER_SHEETS.map(async (name) => {
-      const base = await Assets.load(`/assets/sprites/limezu/${name}`);
+      const base = await loadTexture(`/assets/sprites/limezu/${name}`);
       const rows = [];
       for (let row = 0; row < 4; row++) {
         const frames = [];
