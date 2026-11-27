@@ -12,7 +12,7 @@
  * Pixi world container, so both layers stay pixel-aligned. The SVG has no
  * viewBox, so SVG user units == CSS pixels == Pixi screen units.
  */
-import { Application, Container, Graphics, Sprite, Texture, Text } from '../vendor/pixi.mjs';
+import { Application, Container, Graphics, Sprite, Texture, Text, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, shade } from './palette.js';
 
 const NIGHT_COLOR = 0x0d1522;
@@ -23,6 +23,17 @@ const BUBBLE_STROKE = '#d8c39a';
 const BUBBLE_TEXT = '#5d5145';
 const TAG_FILL = 0x0f172a;
 const TAG_ALPHA = 0.88;
+
+// Limezu Modern Interiors run sheets: 384x32 = 4 directions x 6 frames of 16x16.
+// Row order follows the pack: Up, Left, Down, Right.
+const CHARACTER_SHEETS = ['adam-run.png', 'amelia-run.png', 'alex-run.png', 'bob-run.png'];
+const DIR_ROW = { NE: 0, NW: 1, SW: 2, SE: 3 };
+function hashIndex(id, mod) {
+  let h = 0;
+  for (let i = 0; i < String(id).length; i++) h = (h * 31 + String(id).charCodeAt(i)) >>> 0;
+  return h % mod;
+}
+
 
 // Face peek offset by heading (top-down), identical to the old SVG renderer.
 const FACE_DIR = { NE: [0, -3.4], SE: [3.4, 0], SW: [0, 3.4], NW: [-3.4, 0] };
@@ -74,6 +85,23 @@ export class PixiAgentLayer {
       .stroke({ width: 0.5, color: 0x241b12 });
     this.footTexture = this.app.renderer.generateTexture(footG);
     footG.destroy();
+
+    // Slice character run sheets into per-direction, per-frame textures.
+    this.charFrames = CHARACTER_SHEETS.map((name) => {
+      const base = Texture.from(`/assets/sprites/limezu/${name}`);
+      const rows = [];
+      for (let row = 0; row < 4; row++) {
+        const frames = [];
+        for (let col = 0; col < 6; col++) {
+          frames.push(new Texture({
+            source: base.source,
+            frame: new Rectangle(col * 16, row * 16, 16, 16)
+          }));
+        }
+        rows.push(frames);
+      }
+      return rows;
+    });
 
     this.app.ticker.add((ticker) => this._tick(ticker.deltaMS));
     this._onResize = () => this.resize();
@@ -140,18 +168,13 @@ export class PixiAgentLayer {
     const halo = new Graphics().circle(0, 0, 13).stroke({ width: 1.8, color: haloColor, alpha: 0.85 });
     root.addChild(halo);
 
-    // Body ellipse (department color)
-    const body = new Graphics()
-      .ellipse(0, 0, 7.5, 5.5)
-      .fill(deptColor)
-      .stroke({ width: 1.2, color: shade(deptColor, 22) });
-    root.addChild(body);
-
-    // Head + face peek
-    const head = new Graphics().circle(0, -0.8, 5).fill(0x2b241f);
-    root.addChild(head);
-    const face = new Graphics().ellipse(0, 0, 2.7, 1.8).fill(0xe0a87e);
-    root.addChild(face);
+    // Limezu pixel-art character (deterministic per agent, tinted by department).
+    const charIndex = hashIndex(agent.id, this.charFrames?.length || 1);
+    const sprite = new Sprite(this.charFrames?.[charIndex]?.[2]?.[0] || Texture.WHITE);
+    sprite.anchor.set(0.5);
+    sprite.scale.set(1.6);
+    sprite.tint = Number.parseInt(String(deptColor).replace('#', ''), 16);
+    root.addChild(sprite);
 
     // Name tag (bg width depends on the name, so keep bg + text in a sub-container)
     const tag = new Container();
@@ -191,9 +214,8 @@ export class PixiAgentLayer {
       foot2,
       pulse,
       halo,
-      body,
-      head,
-      face,
+      sprite,
+      charIndex,
       tag,
       tagBg,
       tagText,
@@ -315,13 +337,13 @@ export class PixiAgentLayer {
       rig.foot2.position.set(-pX * 7.6 - hX * swing, -pY * 7.6 - hY * swing);
       rig.foot2.rotation = rot;
 
-      // Face peek toward the heading
-      const dir = agent.direction || 'SE';
-      if (dir !== rig.lastDir) {
-        rig.lastDir = dir;
-        const [fx, fy] = FACE_DIR[dir] || [0, 3.4];
-        rig.face.position.set(fx, fy - 0.8);
-      }
+      // Animated Limezu sprite: direction from heading, frame from walk phase.
+      let row = DIR_ROW[agent.direction] ?? 3;
+      if (Math.abs(hY) > Math.abs(hX)) row = hY < 0 ? 0 : 2;
+      else if (hX !== 0 || hY !== 0) row = hX < 0 ? 1 : 3;
+      const frame = agent.moving ? Math.floor(this._elapsed / 110) % 6 : 0;
+      const tex = this.charFrames?.[rig.charIndex]?.[row]?.[frame];
+      if (tex && rig.sprite.texture !== tex) rig.sprite.texture = tex;
     }
 
     // Remove rigs for agents that disappeared (reset, unprovision)
