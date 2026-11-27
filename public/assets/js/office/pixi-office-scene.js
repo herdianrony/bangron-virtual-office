@@ -135,7 +135,7 @@ export class PixiOfficeScene {
       const zc = colorToNumber(z.accent);
       const g = new Graphics().roundRect(z.x, z.y, z.w, z.h, 6).fill({ color: zc, alpha: 0.1 }).stroke({ width: 1.5, color: zc, alpha: 0.35 });
       room.addChild(g);
-      const t = new Text({ text: z.label, style: { fontSize: 10, fontWeight: '700', fill: 0x475569, fontFamily: 'sans-serif' } });
+      const t = new Text({ text: z.label, style: { fontSize: 16, fontWeight: '700', fill: 0x475569, fontFamily: 'sans-serif' } });
       t.resolution = 2; t.anchor.set(0.5, 1); t.position.set(z.x + z.w / 2, z.y + z.h - 8);
       label.addChild(t);
     }
@@ -184,14 +184,14 @@ export class PixiOfficeScene {
 
       const title = new Text({
         text: String(v.label || meta.name || id).toUpperCase(),
-        style: { fontSize: 13, fontWeight: '800', fill: 0xe2e8f0, fontFamily: 'sans-serif', letterSpacing: 1 }
+        style: { fontSize: 18, fontWeight: '800', fill: 0x334155, fontFamily: 'sans-serif', letterSpacing: 1 }
       });
       title.resolution = 2; title.anchor.set(0.5, 0);
       title.position.set(v.x + v.w / 2, v.y + 14);
       label.addChild(title);
       const sub = new Text({
         text: v.sub || dept,
-        style: { fontSize: 10, fontWeight: '600', fill: 0x94a3b8, fontFamily: 'sans-serif' }
+        style: { fontSize: 13, fontWeight: '600', fill: 0x64748b, fontFamily: 'sans-serif' }
       });
       sub.resolution = 2; sub.anchor.set(0.5, 0);
       sub.position.set(v.x + v.w / 2, v.y + 32);
@@ -243,7 +243,7 @@ export class PixiOfficeScene {
     const body = new Graphics().ellipse(0, 0, 13, 10).fill(dept).stroke({ width: 2, color: 0x334155 });
     const head = new Graphics().circle(0, -2, 9).fill(0x2b241f);
     const face = new Graphics().ellipse(0, -2, 4.5, 3).fill(0xe0a87e);
-    const tagText = new Text({ text: '', style: { fontSize: 12, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
+    const tagText = new Text({ text: '', style: { fontSize: 18, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
     tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 38);
     const tagBg = new Graphics();
     root.addChild(shadow, halo, body, head, face, tagBg, tagText);
