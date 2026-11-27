@@ -52,6 +52,10 @@ export class AgentsView {
             <i class="fi fi-rr-user-add text-xs"></i>
             <span>Register Profile</span>
           </button>
+          <button class="btn btn-outline btn-sm gap-2" id="btn-sync-hermes" title="Sinkronkan daftar profil dari ~/.hermes/profiles">
+            <i class="fi fi-rr-refresh text-xs"></i>
+            <span>Sync Hermes</span>
+          </button>
         </div>
 
         <!-- Filter Bar with DaisyUI Join Component -->
@@ -285,6 +289,19 @@ export class AgentsView {
     // Modal controls
     const modal = document.getElementById('agent-modal');
     document.getElementById('btn-create-profile')?.addEventListener('click', () => modal?.showModal());
+    document.getElementById('btn-sync-hermes')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await api.post('/api/agents/sync-hermes');
+        showToast('success', `Hermes sync: ${res.created.length} baru, ${res.existing.length} sudah ada`);
+        await this.loadAgents(this.filterDept);
+      } catch (err) {
+        showToast('error', `Gagal sync Hermes: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
     document.getElementById('modal-close-btn')?.addEventListener('click', () => modal?.close());
     document.getElementById('modal-cancel-btn')?.addEventListener('click', () => modal?.close());
 

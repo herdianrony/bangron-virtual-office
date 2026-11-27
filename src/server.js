@@ -10,6 +10,7 @@ import { HermesAdapter } from './integrations/hermes/adapter.js';
 import { AgentRepository } from './database/repositories/agent.repository.js';
 import { hermesEventBridge } from './integrations/hermes/event-bridge.js';
 import { recoverActiveHermesRuns } from './integrations/hermes/startup-recovery.js';
+import { hermesProfileSync } from './integrations/hermes/profile-sync-instance.js';
 import { eventPublisher } from './realtime/event-publisher.js';
 import logger from './utils/logger.js';
 
@@ -22,6 +23,7 @@ async function startServer() {
   try {
     const db = getDatabase();
     runMigrations(db);
+    hermesProfileSync.setDb(db);
 
     const { app, sessionStore } = createApp(db);
     const server = http.createServer(app);
@@ -37,6 +39,13 @@ async function startServer() {
       // Start the DEMO auto-play director unless explicitly disabled.
       if (process.env.DEMO_AUTOPLAY !== 'false') {
         demoEngine.start();
+      }
+
+      // Sinkronkan daftar profil Hermes (direktori ~/.hermes/profiles) ke office.
+      try {
+        hermesProfileSync.sync();
+      } catch (err) {
+        logger.error({ err }, 'Hermes profile sync failed at startup');
       }
 
       // G6.1: EventBridge startup recovery for active Hermes runs
