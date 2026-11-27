@@ -125,7 +125,7 @@ export class OfficeView {
         </div>
 
         <!-- Compact live status (DaisyUI badges) -->
-        <div class="office-status absolute bottom-16 left-4 z-20 flex flex-wrap items-center gap-2" id="office-status">
+        <div class="office-status absolute bottom-16 right-4 z-20 flex flex-wrap items-center justify-end gap-2" id="office-status">
           <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-user-robot mr-1"></i><span id="os-agents">0</span> agents</span>
           <span class="badge badge-sm badge-ghost font-mono"><i class="fi fi-rr-building mr-1"></i><span id="os-rooms">0</span> rooms</span>
           <span class="badge badge-sm badge-success font-mono" id="os-runtime">LIVE</span>
