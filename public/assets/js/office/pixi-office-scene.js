@@ -15,7 +15,7 @@
  *   scene.pick(clientX, clientY)       // -> { kind, id, name } | null
  *   scene.destroy()
  */
-import { Application, Container, Graphics, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
+import { Application, Container, Graphics, Sprite, Texture, Text, Circle, Rectangle } from '../vendor/pixi.mjs';
 import { DEPARTMENT_COLORS, STATUS_HALO_COLORS, colorToNumber } from './palette.js';
 import { VISUAL_BOUNDS, VISUAL_ROOMS, VISUAL_ZONES, VISUAL_CORRIDORS, VISUAL_THEME, mapToVisual } from './visual-layout.js';
 
@@ -78,6 +78,23 @@ export class PixiOfficeScene {
       width: host.clientWidth || 960,
       height: host.clientHeight || 640
     });
+    try {
+      const base = Texture.from('/assets/sprites/agents.png');
+      this.spriteFrames = {};
+      const dirs = ['S', 'W', 'E', 'N'];
+      for (let row = 0; row < dirs.length; row++) {
+        for (let col = 0; col < 4; col++) {
+          this.spriteFrames[`${dirs[row]}${col}`] = new Texture({
+            source: base.source,
+            frame: new Rectangle(col * 48, row * 64, 48, 64)
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Office] sprite sheet unavailable, using vector fallback', err);
+      this.spriteFrames = null;
+    }
+
     this.app.canvas.id = 'office-pixi-canvas';
     this.app.canvas.className = 'office-scene-canvas';
     host.appendChild(this.app.canvas);
@@ -240,38 +257,33 @@ export class PixiOfficeScene {
   _buildAgent(agent) {
     const root = new Container();
     const dept = colorToNumber(DEPARTMENT_COLORS[agent.department] || '#3b82f6');
-    const skin = 0xf1c27d;
-    const hair = 0x2b241f;
 
-    // Ground shadow + status aura
     const shadow = new Graphics().ellipse(0, 10, 17, 7).fill({ color: 0x000000, alpha: 0.28 });
-    const aura = new Graphics().circle(0, 0, 22).stroke({ width: 2.4, color: dept, alpha: 0.5 });
+    const aura = new Graphics().circle(0, -2, 22).stroke({ width: 2.4, color: dept, alpha: 0.5 });
     root.addChild(shadow, aura);
 
-    // Legs (animated by walk phase)
-    const legL = new Graphics().roundRect(-7, 2, 6, 13, 2).fill(0x334155);
-    const legR = new Graphics().roundRect(1, 2, 6, 13, 2).fill(0x334155);
-    root.addChild(legL, legR);
+    let sprite = null;
+    let vector = null;
+    if (this.spriteFrames) {
+      sprite = new Sprite(this.spriteFrames.S0);
+      sprite.anchor.set(0.5, 0.82);
+      sprite.scale.set(0.62);
+      sprite.tint = dept;
+      root.addChild(sprite);
+    } else {
+      // Fallback: procedural vector character (no sprite sheet loaded).
+      vector = new Container();
+      vector.addChild(
+        new Graphics().roundRect(-7, 2, 6, 13, 2).fill(0x334155),
+        new Graphics().roundRect(1, 2, 6, 13, 2).fill(0x334155),
+        new Graphics().roundRect(-12, -10, 24, 22, 7).fill(dept).stroke({ width: 1.5, color: 0x1e293b, alpha: 0.6 }),
+        new Graphics().circle(0, -14, 10).fill(0x2b241f),
+        new Graphics().ellipse(0, -12, 7.5, 8).fill(0xf1c27d)
+      );
+      vector.scale.set(0.62);
+      root.addChild(vector);
+    }
 
-    // Body: shirt in department color + collar + arms
-    const body = new Graphics()
-      .roundRect(-12, -10, 24, 22, 7)
-      .fill(dept)
-      .stroke({ width: 1.5, color: 0x1e293b, alpha: 0.6 });
-    body.poly([-5, -10, 0, -4, 5, -10]).fill({ color: 0xffffff, alpha: 0.55 });
-    const armL = new Graphics().roundRect(-17, -8, 6, 16, 3).fill(dept);
-    const armR = new Graphics().roundRect(11, -8, 6, 16, 3).fill(dept);
-    root.addChild(armL, body, armR);
-
-    // Head: hair cap + face + eyes (direction-aware peeking)
-    const head = new Graphics();
-    head.circle(0, -14, 10).fill(hair);
-    head.ellipse(0, -12, 7.5, 8).fill(skin);
-    head.arc(0, -12, 8, Math.PI, 0).fill(hair);
-    const eyes = new Graphics();
-    root.addChild(head, eyes);
-
-    // Name tag
     const tagText = new Text({ text: '', style: { fontSize: 15, fontWeight: '700', fill: '#f8fafc', fontFamily: 'sans-serif' } });
     tagText.resolution = 3; tagText.anchor.set(0.5); tagText.position.set(0, 32);
     const tagBg = new Graphics();
@@ -282,25 +294,23 @@ export class PixiOfficeScene {
     root.hitArea = new Circle(0, -2, 20);
     root.on('pointertap', (e) => { e.stopPropagation(); this.onAgentClick?.(agent.id); });
 
-    return { root, aura, legL, legR, armL, armR, eyes, body, tagText, tagBg, dept, phase: 0 };
+    return { root, aura, sprite, vector, tagText, tagBg, dept, phase: 0 };
   }
 
   _animateAgentRig(rig, agent) {
     const moving = !!agent.moving;
-    if (moving) rig.phase = (rig.phase || 0) + 0.25;
-    const swing = moving ? Math.sin(rig.phase) * 5 : 0;
-    rig.legL.y = 2 + swing;
-    rig.legR.y = 2 - swing;
-    rig.armL.rotation = moving ? -swing * 0.04 : 0;
-    rig.armR.rotation = moving ? swing * 0.04 : 0;
-
-    // Eyes peek toward heading (top-down 4-way)
+    if (moving) rig.phase = (rig.phase || 0) + 0.14;
     const dir = String(agent.direction || 'SE');
-    const dx = dir.includes('E') ? 3 : dir.includes('W') ? -3 : 0;
-    const dy = dir.includes('S') ? 1 : dir.includes('N') ? -2 : 0;
-    rig.eyes.clear()
-      .circle(-3 + dx, -13 + dy, 1.6).fill(0x0f172a)
-      .circle(3 + dx, -13 + dy, 1.6).fill(0x0f172a);
+    const row = dir.includes('N') ? 'N' : dir.includes('W') ? 'W' : dir.includes('E') ? 'E' : 'S';
+    const frame = moving ? Math.floor(rig.phase) % 4 : 0;
+
+    if (rig.sprite && this.spriteFrames) {
+      rig.sprite.texture = this.spriteFrames[`${row}${frame}`] || this.spriteFrames.S0;
+      rig.sprite.y = moving ? (frame % 2 ? 1 : 0) : 0;
+    } else if (rig.vector) {
+      rig.vector.children[0].y = moving ? (frame % 2 ? 4 : 2) : 2;
+      rig.vector.children[1].y = moving ? (frame % 2 ? 0 : 2) : 2;
+    }
   }
 
   applyCamera(t = {}) {

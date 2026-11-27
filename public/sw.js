@@ -3,9 +3,9 @@
  * Offline caching, background sync, push notifications ready
  */
 
-const CACHE_NAME = 'bangron-vo-v4';
+const CACHE_NAME = 'bangron-vo-v5';
 const STATIC_ASSETS = [
-  '/', '/index.html', '/manifest.json', '/assets/css/office.css',
+  '/', '/index.html', '/manifest.json', '/assets/css/office.css', '/assets/sprites/agents.png',
   '/assets/js/core/api.js', '/assets/js/core/store.js',
   '/assets/js/core/toast.js', '/assets/js/core/skeleton.js',
   '/assets/js/core/empty-state.js', '/assets/js/core/confirm-dialog.js',
