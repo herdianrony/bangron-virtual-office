@@ -79,19 +79,26 @@ export class PixiOfficeScene {
       height: host.clientHeight || 640
     });
     try {
-      const base = Texture.from('/assets/sprites/agents.png');
+      // Limezu Modern Interiors — 4 characters, 4 directions x 6 walk frames.
+      // Wire order in the source sheet: Up, Left, Down, Right.
+      const names = ['adam', 'amelia', 'alex', 'bob'];
+      const dirs = ['N', 'W', 'S', 'E'];
       this.spriteFrames = {};
-      const dirs = ['S', 'W', 'E', 'N'];
-      for (let row = 0; row < dirs.length; row++) {
-        for (let col = 0; col < 4; col++) {
-          this.spriteFrames[`${dirs[row]}${col}`] = new Texture({
-            source: base.source,
-            frame: new Rectangle(col * 48, row * 64, 48, 64)
-          });
+      this.spriteSets = names;
+      for (let set = 0; set < names.length; set++) {
+        const base = Texture.from(`/assets/sprites/limezu/${names[set]}-run.png`);
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 6; col++) {
+            this.spriteFrames[`${set}-${dirs[row]}-${col}`] = new Texture({
+              source: base.source,
+              frame: new Rectangle(col * 16, row * 16, 16, 16)
+            });
+          }
         }
       }
+      this.tileTexture = Texture.from('/assets/sprites/limezu/interiors-32.png');
     } catch (err) {
-      console.warn('[Office] sprite sheet unavailable, using vector fallback', err);
+      console.warn('[Office] Limezu sprites unavailable, using vector fallback', err);
       this.spriteFrames = null;
     }
 
@@ -224,6 +231,18 @@ export class PixiOfficeScene {
         .stroke({ width: 1, color: 0x94a3b8, alpha: 0.5 });
       furniture.addChild(g);
       this.hitAreas.push({ rect: new Rectangle(mapped.x - w / 2, mapped.y - h / 2, w, h), kind: 'furniture', id: ws.id, name: ws.name || 'Workstation' });
+      // Detail furnitur dari tileset Limezu (petakan tipe ke tile sederhana).
+      if (this.tileTexture) {
+        const tile = new Sprite(this.tileTexture);
+        tile.anchor.set(0.5);
+        tile.width = w * 0.85;
+        tile.height = h * 0.85;
+        tile.position.set(mapped.x, mapped.y - h / 2);
+        tile.tint = 0xffffff;
+        tile.alpha = 0.55;
+        furniture.addChild(tile);
+      }
+
     }
   }
 
@@ -265,9 +284,10 @@ export class PixiOfficeScene {
     let sprite = null;
     let vector = null;
     if (this.spriteFrames) {
-      sprite = new Sprite(this.spriteFrames.S0);
+      const setIndex = Math.abs([...agent.id].reduce((a,c)=>a+c.charCodeAt(0),0)) % this.spriteSets.length;
+      sprite = new Sprite(this.spriteFrames[`${setIndex}-S-0`]);
       sprite.anchor.set(0.5, 0.82);
-      sprite.scale.set(0.52);
+      sprite.scale.set(1.7);
       sprite.tint = dept;
       root.addChild(sprite);
     } else {
@@ -294,7 +314,7 @@ export class PixiOfficeScene {
     root.hitArea = new Circle(0, -2, 20);
     root.on('pointertap', (e) => { e.stopPropagation(); this.onAgentClick?.(agent.id); });
 
-    return { root, aura, sprite, vector, tagText, tagBg, dept, phase: 0 };
+    return { root, aura, sprite, vector, tagText, tagBg, dept, phase: 0, setIndex: sprite ? Math.abs([...agent.id].reduce((a,c)=>a+c.charCodeAt(0),0)) % this.spriteSets.length : 0 };
   }
 
   _animateAgentRig(rig, agent) {
@@ -305,7 +325,8 @@ export class PixiOfficeScene {
     const frame = moving ? Math.floor(rig.phase) % 4 : 0;
 
     if (rig.sprite && this.spriteFrames) {
-      rig.sprite.texture = this.spriteFrames[`${row}${frame}`] || this.spriteFrames.S0;
+      const f = moving ? frame % 6 : 0;
+      rig.sprite.texture = this.spriteFrames[`${rig.setIndex}-${row}-${f}`] || this.spriteFrames[`${rig.setIndex}-S-0`];
       rig.sprite.y = moving ? (frame % 2 ? 1 : 0) : 0;
     } else if (rig.vector) {
       rig.vector.children[0].y = moving ? (frame % 2 ? 4 : 2) : 2;
