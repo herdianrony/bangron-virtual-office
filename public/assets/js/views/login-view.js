@@ -103,7 +103,7 @@ export class LoginView {
           // Restore previous view hash without full page reload
           const preLoginHash = sessionStorage.getItem('preLoginHash') || '#/office';
           sessionStorage.removeItem('preLoginHash');
-          toast.success('Login berhasil. Selamat datang, Director.');
+          toast.success('Login berhasil. Selamat datang, Director.', { duration: 2500 });
           window.location.hash = preLoginHash;
         }
       } catch (err) {
